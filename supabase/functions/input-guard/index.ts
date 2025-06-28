@@ -1,12 +1,24 @@
-import { serve } from 'https://esm.sh/v135/supabase-functions@1';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js';
-import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.21.0';
 
-export const main = serve(async (req) => {
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+Deno.serve(async (req) => {
   try {
+    if (req.method === "OPTIONS") {
+      return new Response(null, {
+        status: 200,
+        headers: corsHeaders,
+      });
+    }
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!, 
-      Deno.env.get('SUPABASE_SERVICE_ROLE')!
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
     
     const { text, client_id } = await req.json();
@@ -17,7 +29,10 @@ export const main = serve(async (req) => {
           allowed: false, 
           reason: 'missing_required_fields' 
         }), 
-        { status: 400 }
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
       );
     }
 
@@ -59,7 +74,10 @@ export const main = serve(async (req) => {
           reason: 'crisis_detected',
           severity: crisisMatch.severity
         }), 
-        { status: 200 }
+        { 
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
       );
     }
 
@@ -101,13 +119,19 @@ Analysis:`;
           allowed: false, 
           reason: 'safety_violation' 
         }), 
-        { status: 200 }
+        { 
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
       );
     }
 
     return new Response(
       JSON.stringify({ allowed: true }), 
-      { status: 200 }
+      { 
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
     );
     
   } catch (error) {
@@ -117,9 +141,10 @@ Analysis:`;
         allowed: false, 
         reason: 'system_error' 
       }), 
-      { status: 500 }
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
     );
   }
 });
-
-export default main; 

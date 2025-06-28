@@ -1,11 +1,20 @@
-import { serve } from 'https://esm.sh/v135/supabase-functions@1';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js';
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-export const main = serve(async (req) => {
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE')!
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
     // Calculate date 30 days ago
@@ -24,7 +33,10 @@ export const main = serve(async (req) => {
       console.error('Error selecting old chat data:', selectError);
       return new Response(
         JSON.stringify({ error: 'Failed to select old chat data' }),
-        { status: 500 }
+        { 
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
       );
     }
 
@@ -35,7 +47,10 @@ export const main = serve(async (req) => {
           message: 'No data to archive',
           archived: 0 
         }),
-        { status: 200 }
+        { 
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
       );
     }
 
@@ -48,7 +63,10 @@ export const main = serve(async (req) => {
       console.error('Error inserting into archive:', insertError);
       return new Response(
         JSON.stringify({ error: 'Failed to insert into archive' }),
-        { status: 500 }
+        { 
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
       );
     }
 
@@ -62,7 +80,10 @@ export const main = serve(async (req) => {
       console.error('Error deleting old chat data:', deleteError);
       return new Response(
         JSON.stringify({ error: 'Failed to delete old chat data' }),
-        { status: 500 }
+        { 
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
       );
     }
 
@@ -89,16 +110,20 @@ export const main = serve(async (req) => {
         archived: oldChatData.length,
         timestamp: new Date().toISOString()
       }),
-      { status: 200 }
+      { 
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
     );
 
   } catch (error) {
     console.error('Archive chat error:', error);
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
-      { status: 500 }
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
     );
   }
 });
-
-export default main; 
