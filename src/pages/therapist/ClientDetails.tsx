@@ -27,6 +27,7 @@ import {
   Star
 } from 'lucide-react';
 import { getClientDisplayName, getClientEmail, normalizeClientId } from '../../utils/clientUtils';
+import TherapistChatHistory from '../../components/chat/TherapistChatHistory';
 
 // Demo trend data generator
 const generateTrendData = (clientId: string) => {
@@ -70,7 +71,7 @@ interface Exercise {
 const ClientDetails: React.FC = () => {
   const { clientId } = useParams<{ clientId: string }>();
   const { getClient, addNote, addCopingStrategy } = useTherapy();
-  const [activeTab, setActiveTab] = useState<'overview' | 'trends' | 'notes' | 'exercises'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'trends' | 'notes' | 'exercises' | 'chat'>('overview');
   const [trendData, setTrendData] = useState<any[]>([]);
   const [clientInfo, setClientInfo] = useState<any>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -283,7 +284,7 @@ const ClientDetails: React.FC = () => {
       {/* Tabs */}
       <div className="border-b border-gray-200">
         <div className="flex space-x-8">
-          {['overview', 'trends', 'notes', 'exercises'].map((tab) => (
+          {['overview', 'trends', 'notes', 'exercises', 'chat'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
@@ -791,6 +792,12 @@ const ClientDetails: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'chat' && clientId && (
+        <div className="mt-6">
+          <TherapistChatHistory clientId={clientId} />
         </div>
       )}
     </div>

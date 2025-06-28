@@ -479,10 +479,36 @@ export class MCPService {
   }
 }
 
-// Export functions for easy use
+// Export the main functions for external use
 export const logMoodEntryMCP = MCPService.logMoodEntry;
 export const logJournalEntryMCP = MCPService.logJournalEntry;
 export const logAISuggestionMCP = MCPService.logAISuggestion;
 export const getMoodHistoryMCP = MCPService.getMoodHistory;
 export const getJournalHistoryMCP = MCPService.getJournalHistory;
-export const getAISuggestionsAnalyticsMCP = MCPService.getAISuggestionsAnalytics; 
+export const getAISuggestionsAnalyticsMCP = MCPService.getAISuggestionsAnalytics;
+
+/**
+ * Convert demo user ID to UUID format for database operations
+ */
+export function convertToUUID(demoUserId: string): string {
+  // For demo users, we'll map them to existing UUIDs in the database
+  const demoUserMappings: Record<string, string> = {
+    'demo-patient-1751129467386': 'a9154110-1a92-4219-b3ab-10e8d788f49f', // lucatherightside@hotmail.it
+    'demo-therapist-1751129467386': 'caf247e9-b966-4382-aa3c-19b97ed8fafb', // lucadng@gmail.com
+  };
+  
+  // If it's already a UUID, return as-is
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (uuidRegex.test(demoUserId)) {
+    return demoUserId;
+  }
+  
+  // Map demo user to UUID
+  const mappedUUID = demoUserMappings[demoUserId];
+  if (mappedUUID) {
+    return mappedUUID;
+  }
+  
+  // For other demo users, use a default UUID
+  return 'a9154110-1a92-4219-b3ab-10e8d788f49f';
+} 

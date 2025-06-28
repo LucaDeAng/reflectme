@@ -451,6 +451,35 @@ export class GeminiAIService {
     return summary!;
   }
 
+  /**
+   * Generate a chat response using a full context prompt (for context-aware AI)
+   */
+  static async generateResponseWithContext(
+    userMessage: string,
+    fullPrompt: string,
+    userId?: string
+  ): Promise<string> {
+    const { logger } = Sentry;
+    logger.info('GeminiAIService.generateResponseWithContext called', { userId, userMessage });
+    console.log('📝 Gemini full prompt:', fullPrompt.substring(0, 1000)); // Log first 1000 chars
+    try {
+      const model = this.getModel();
+      if (model) {
+        // Use the fullPrompt as the main message for Gemini
+        const result = await model.generateContent(fullPrompt);
+        const responseText = result.response.text().trim();
+        logger.info('Gemini raw response', { length: responseText.length });
+        return responseText;
+      } else {
+        logger.warn('Gemini model not available, using fallback');
+        return this.generaRispostaChatFallback(userMessage, { emozioni: [], triggers: [] }).contenuto;
+      }
+    } catch (error) {
+      logger.error('Error in generateResponseWithContext', { error });
+      return this.generaRispostaChatFallback(userMessage, { emozioni: [], triggers: [] }).contenuto;
+    }
+  }
+
   // === METODI PRIVATI ===
 
   private static async analizzaConGemini(contenutoNote: any[], model: any): Promise<NotesAnalysis> {

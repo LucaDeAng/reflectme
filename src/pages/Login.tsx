@@ -1,23 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/common/Header';
 import Footer from '../components/common/Footer';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState<'patient' | 'therapist' | 'admin' | null>(null);
   const { login, user, register } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   
   // Get role from URL params if provided
   const roleFromUrl = searchParams.get('role') as 'patient' | 'therapist' | 'admin' | null;
+
+  // Handle registration success message and pre-fill email
+  useEffect(() => {
+    if (location.state?.message) {
+      setSuccessMessage(location.state.message);
+    }
+    if (location.state?.email) {
+      setEmail(location.state.email);
+    }
+  }, [location.state]);
 
   // Redirect user if already logged in
   useEffect(() => {
@@ -71,9 +83,9 @@ const Login: React.FC = () => {
     if (loading || demoLoading) return; // Prevent double clicks
 
     const demoCredentials = {
-      patient: { email: 'democlient@mindtwin.demo', password: 'demo123456' },
-      therapist: { email: 'demotherapist@mindtwin.demo', password: 'demo123456' },
-      admin: { email: 'admin@mindtwin.demo', password: 'demo123456' }
+      patient: { email: 'demo.client@zentia.app', password: 'ZentiaClient2024!' },
+      therapist: { email: 'demo.therapist@zentia.app', password: 'ZentiaDemo2024!' },
+      admin: { email: 'admin@zentia.app', password: 'ZentiaAdmin2024!' }
     };
 
     const { email: demoEmail, password: demoPassword } = demoCredentials[role];
@@ -107,10 +119,10 @@ const Login: React.FC = () => {
       setLoading(true);
       
       // Create demo client
-      await register('Demo Client', 'democlient@mindtwin.demo', 'demo123456', 'patient');
+      await register('Demo Client', 'demo.client@zentia.app', 'ZentiaClient2024!', 'patient');
       
       // Create demo therapist  
-      await register('Demo Therapist', 'demotherapist@mindtwin.demo', 'demo123456', 'therapist');
+      await register('Demo Therapist', 'demo.therapist@zentia.app', 'ZentiaDemo2024!', 'therapist');
       
       setError('Demo users created successfully! Try the demo buttons now.');
     } catch (err: any) {
@@ -136,6 +148,13 @@ const Login: React.FC = () => {
             <h1 className="text-2xl font-bold text-neutral-900">Welcome Back</h1>
             <p className="text-neutral-600 mt-2">Sign in to continue your journey</p>
           </div>
+          
+          {successMessage && (
+            <div className="bg-success-50 border border-success-200 text-success-700 p-4 rounded-md mb-6 flex items-start">
+              <CheckCircle className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" />
+              <span className="text-sm">{successMessage}</span>
+            </div>
+          )}
           
           {error && (
             <div className="bg-error-50 border border-error-200 text-error-700 p-4 rounded-md mb-6 flex items-start">

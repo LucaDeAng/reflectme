@@ -79,57 +79,29 @@ const DataSeeder: React.FC = () => {
         const socialInteraction = Math.random() > 0.4;
         const stressLevel = Math.max(1, Math.min(10, Math.round(8 - moodRating + Math.random() * 2)));
         
-        // Sample journal entries and notes
+        // Minimal sample data for development testing only
         const journalEntries = [
-          'Had a productive day with good energy levels.',
-          'Feeling more balanced after practicing breathing exercises.',
-          'Challenging day but managed to use coping strategies.',
-          'Great day with friends and family. Mood was excellent.',
-          'Working on maintaining consistency with daily routines.',
-          'Some anxiety today but the grounding technique helped.',
-          'Excellent day! Everything went smoothly and felt positive.',
-          'Medium day. Practiced mindfulness during lunch break.',
-          'Good progress with sleep hygiene and morning routine.',
-          'Rough night affected my mood, but afternoon was better.'
+          'Today was a productive day.',
+          'Feeling grateful for progress made.',
+          'Practiced self-care today.'
         ];
         
         const gratitudeNotes = [
-          'Grateful for my support system',
-          'Thankful for good health',
-          'Grateful for small wins today',
-          'Appreciative of beautiful weather',
-          'Thankful for progress in therapy',
-          'Grateful for peaceful moments',
-          'Appreciative of family time',
-          'Thankful for energy to exercise',
-          'Grateful for restful sleep',
-          'Appreciative of positive interactions'
+          'Grateful for support',
+          'Thankful for growth',
+          'Appreciative of learning'
         ];
         
         const taskNotes = [
-          'Completed breathing exercises as planned',
-          'Practiced grounding technique when feeling anxious',
-          'Used mindfulness during stressful moments',
-          'Completed mood tracking for the day',
-          'Practiced cognitive restructuring exercises',
-          'Engaged in behavioral activation activities',
-          'Maintained sleep hygiene routine',
-          'Used relaxation techniques before bed',
-          'Practiced gratitude journaling',
-          'Completed daily reflection exercise'
+          'Completed daily activity',
+          'Practiced wellness technique',
+          'Made healthy choice'
         ];
         
         const taskRemarks = [
-          'Technique was very effective today',
-          'Finding it easier to implement strategies',
-          'Still working on consistency but improving',
-          'Noticed positive effects immediately',
-          'Challenging but worth the effort',
-          'Building good habits gradually',
-          'Feeling more confident with tools',
-          'Seeing real improvements over time',
-          'Strategy helped manage difficult moment',
-          'Consistency is paying off'
+          'Strategy was helpful today',
+          'Building consistency gradually',
+          'Positive effects noticed'
         ];
         
         const entry = {

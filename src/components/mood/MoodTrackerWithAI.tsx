@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { EnhancedAICompanion, CopingSuggestion, logMoodEntry } from '../../services/enhancedAICompanion';
+import { EnhancedAICompanion, CopingSuggestion } from '../../services/enhancedAICompanion';
+import { logMoodEntryMCP } from '../../services/mcpService';
 import { useAuth } from '../../contexts/AuthContext';
+import { useZentia } from '../../contexts/ZentiaContext';
 import { Heart, Zap, Lightbulb, Clock } from 'lucide-react';
 
 interface MoodTrackerWithAIProps {
@@ -11,12 +13,14 @@ interface MoodTrackerWithAIProps {
 
 const MoodTrackerWithAI: React.FC<MoodTrackerWithAIProps> = ({ onMoodLogged, className = '' }) => {
   const { user } = useAuth();
+  const { addMoodEntry } = useZentia();
   const [selectedMood, setSelectedMood] = useState<number | null>(null);
   const [trigger, setTrigger] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [aiResponse, setAiResponse] = useState<string>('');
   const [suggestions, setSuggestions] = useState<CopingSuggestion[]>([]);
   const [showAISupport, setShowAISupport] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const moodLabels = [
     'Awful', 'Very Bad', 'Bad', 'Poor', 'Fair', 
@@ -69,18 +73,52 @@ const MoodTrackerWithAI: React.FC<MoodTrackerWithAIProps> = ({ onMoodLogged, cla
     setIsLoading(true);
     
     try {
-      // Log mood to database
+      // Log mood to database via MCP
       if (user?.id) {
-        await logMoodEntry(user.id, selectedMood, trigger);
+        console.log('🎭 Logging mood entry:', { userId: user.id, mood: selectedMood, trigger });
+        await logMoodEntryMCP(user.id, selectedMood, trigger);
       }
+      
+      // Add mood to UI state for immediate display
+      addMoodEntry({
+        date: new Date().toISOString().split('T')[0],
+        mood: selectedMood,
+        trigger: trigger || undefined,
+        context: 'manual',
+        notes: trigger ? `Manual entry: ${trigger}` : 'Manual mood entry'
+      });
+      
+      console.log('✅ Mood entry added to UI state');
+      
       // Trigger AI support if not already triggered
       if (!showAISupport && selectedMood <= 5) {
         await triggerAISupport(selectedMood, trigger);
       }
+      
       // Call parent callback
       onMoodLogged?.(selectedMood, trigger);
+      
+      // Show success message
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+      
+      // Reset form after successful submission
+      setSelectedMood(null);
+      setTrigger('');
+      setShowAISupport(false);
+      setSuggestions([]);
+      setAiResponse('');
+      
     } catch (error) {
-      console.error('Error logging mood:', error);
+      console.error('❌ Error logging mood:', error);
+      // Still add to UI state even if MCP fails
+      addMoodEntry({
+        date: new Date().toISOString().split('T')[0],
+        mood: selectedMood,
+        trigger: trigger || undefined,
+        context: 'manual',
+        notes: 'Manual entry (MCP failed)'
+      });
     } finally {
       setIsLoading(false);
     }
@@ -94,6 +132,22 @@ const MoodTrackerWithAI: React.FC<MoodTrackerWithAIProps> = ({ onMoodLogged, cla
 
   return (
     <div className={`bg-white rounded-2xl p-6 shadow-soft border border-gray-200 ${className}`}>
+      {/* Success Message */}
+      {showSuccess && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className="mb-4 p-3 bg-green-100 border border-green-200 rounded-lg"
+        >
+          <div className="flex items-center">
+            <div className="w-4 h-4 bg-green-500 rounded-full mr-2"></div>
+            <span className="text-green-800 text-sm font-medium">
+              Mood logged successfully! Check your insights for updated progress.
+            </span>
+          </div>
+        </motion.div>
+      )}
       {/* Mood Selection */}
       <div className="mb-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
@@ -214,14 +268,24 @@ const MoodTrackerWithAI: React.FC<MoodTrackerWithAIProps> = ({ onMoodLogged, cla
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="flex justify-end"
+          className="flex justify-between items-center"
         >
+          <div className="text-sm text-gray-600">
+            Selected: <span className="font-medium">{moodLabels[selectedMood - 1]} ({selectedMood}/10)</span>
+          </div>
           <button
             onClick={handleSubmit}
             disabled={isLoading}
-            className="px-6 py-3 bg-primary-600 text-white rounded-xl hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-6 py-3 bg-primary-600 text-white rounded-xl hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
           >
-            {isLoading ? 'Logging...' : 'Log Mood'}
+            {isLoading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                Logging...
+              </>
+            ) : (
+              'Log Mood'
+            )}
           </button>
         </motion.div>
       )}

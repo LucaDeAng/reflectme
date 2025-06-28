@@ -58,17 +58,17 @@ const Welcome: React.FC = () => {
   });
 
   const isNewUser = location.state?.newUser || false;
-  const userRole = location.state?.role || user?.role || 'patient';
+  const userRole = user?.role || 'patient';
 
   // Redirect if not a new user after 5 seconds
   useEffect(() => {
-    if (!isNewUser) {
+    if (!isNewUser && user) {
       const timer = setTimeout(() => {
-        navigate(userRole === 'therapist' ? '/therapist' : '/client');
+        navigate(user.role === 'therapist' ? '/therapist' : '/client');
       }, 5000);
       return () => clearTimeout(timer);
     }
-  }, [isNewUser, navigate, userRole]);
+  }, [isNewUser, navigate, user]);
 
   const patientGoals = [
     'Reduce anxiety and stress',
@@ -112,7 +112,7 @@ const Welcome: React.FC = () => {
   const welcomeSteps: OnboardingStep[] = [
     {
       id: 'welcome',
-      title: `Welcome to Your Mental Health Journey, ${user?.name?.split(' ')[0] || 'Friend'}!`,
+              title: `Welcome to Your Mental Health Journey, ${user?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'User'}!`,
       subtitle: userRole === 'therapist' 
         ? 'Empowering you to provide exceptional care with AI-powered tools'
         : 'Your safe space for growth, healing, and connection',

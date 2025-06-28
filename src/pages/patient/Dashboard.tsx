@@ -25,6 +25,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import MoodTrackerWithAI from '../../components/mood/MoodTrackerWithAI';
 import { EnhancedAICompanionMCP } from '../../services/enhancedAICompanionMCP';
 import * as Sentry from "@sentry/react";
+import ClientChatHistory from '../../components/chat/ClientChatHistory';
 
 const PatientDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -177,7 +178,7 @@ const PatientDashboard: React.FC = () => {
             <Heart className="h-8 w-8 text-white" />
           </div>
           <h1 className="text-4xl font-bold text-gray-900 mb-4 animate-fade-in-up">
-            Welcome back, {user?.name?.split(' ')[0] || 'Friend'}! 🌟
+                            Welcome back, {user?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'User'}! 🌟
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto animate-fade-in-up" style={{animationDelay: '200ms'}}>
             Your AI-powered wellness companion is ready to support your mental health journey.
@@ -349,6 +350,12 @@ const PatientDashboard: React.FC = () => {
             <MoodTrackerWithAI onMoodSelect={handleMoodSelection} selectedMood={selectedMood} />
           </CardContent>
         </Card>
+
+        {user?.id && (
+          <div className="mt-8">
+            <ClientChatHistory clientId={user.id} />
+          </div>
+        )}
       </div>
     </div>
   );

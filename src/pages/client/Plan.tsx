@@ -99,196 +99,47 @@ const Plan: React.FC = () => {
   }, [user]);
 
   const loadPlanData = async () => {
-    // Load exercises
+    // Load minimal demo exercises - real data will come from therapist assignments
     setExercises([
       {
         id: '1',
-        title: 'Morning Mindfulness Meditation',
+        title: 'Daily Check-in',
         type: 'mindfulness',
-        duration: 10,
-        difficulty: 'beginner',
-        description: 'Start your day with focused breathing and present-moment awareness',
-        instructions: [
-          'Find a comfortable seated position',
-          'Close your eyes and focus on your breath',
-          'When thoughts arise, gently return attention to breathing',
-          'Continue for 10 minutes'
-        ],
-        completed: true,
-        completedAt: new Date().toISOString(),
-        streak: 7,
-        category: 'Daily Practice'
-      },
-      {
-        id: '2',
-        title: 'Cognitive Restructuring Exercise',
-        type: 'cbt',
-        duration: 15,
-        difficulty: 'intermediate',
-        description: 'Challenge negative thought patterns and develop balanced thinking',
-        instructions: [
-          'Identify a negative thought you had today',
-          'Write down evidence for and against this thought',
-          'Create a more balanced, realistic alternative',
-          'Practice the new thought pattern'
-        ],
-        completed: false,
-        streak: 0,
-        category: 'Cognitive Training'
-      },
-      {
-        id: '3',
-        title: 'Progressive Muscle Relaxation',
-        type: 'relaxation',
-        duration: 20,
-        difficulty: 'beginner',
-        description: 'Release physical tension through systematic muscle relaxation',
-        instructions: [
-          'Lie down in a comfortable position',
-          'Start with your toes, tense for 5 seconds then release',
-          'Work your way up through each muscle group',
-          'End with deep breathing'
-        ],
-        completed: false,
-        streak: 0,
-        category: 'Stress Relief'
-      },
-      {
-        id: '4',
-        title: 'Gratitude Journaling',
-        type: 'journaling',
         duration: 5,
         difficulty: 'beginner',
-        description: 'Write down three things you\'re grateful for today',
+        description: 'Quick mood and wellness assessment',
         instructions: [
-          'Set aside 5 minutes of quiet time',
-          'Write down 3 specific things you\'re grateful for',
-          'Include why each item is meaningful to you',
-          'Reflect on the positive emotions this brings'
-        ],
-        completed: true,
-        completedAt: new Date(Date.now() - 86400000).toISOString(),
-        streak: 14,
-        category: 'Emotional Wellness'
-      },
-      {
-        id: '5',
-        title: 'Gentle Movement & Stretching',
-        type: 'movement',
-        duration: 15,
-        difficulty: 'beginner',
-        description: 'Light physical activity to boost mood and energy',
-        instructions: [
-          'Begin with gentle neck and shoulder rolls',
-          'Perform basic stretches for major muscle groups',
-          'Include light cardio like walking in place',
-          'End with deep breathing'
+          'Take a moment to notice how you\'re feeling',
+          'Rate your current mood and energy',
+          'Set a positive intention for today'
         ],
         completed: false,
         streak: 0,
-        category: 'Physical Wellness'
+        category: 'Daily Practice'
       }
     ]);
 
-    // Load roadmap
+    // Load minimal roadmap - real data will come from therapist
     setRoadmap([
       {
         id: '1',
-        title: 'Foundation Building',
-        description: 'Establish basic coping skills and daily routines',
-        status: 'completed',
-        dueDate: '2024-01-15',
-        progress: 100,
-        tasks: [
-          { id: '1a', title: 'Complete initial assessment', completed: true },
-          { id: '1b', title: 'Learn breathing techniques', completed: true },
-          { id: '1c', title: 'Establish morning routine', completed: true }
-        ]
-      },
-      {
-        id: '2',
-        title: 'Cognitive Skills Development',
-        description: 'Learn to identify and challenge negative thought patterns',
+        title: 'Getting Started',
+        description: 'Complete initial assessment and setup',
         status: 'in-progress',
-        dueDate: '2024-02-15',
-        progress: 60,
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        progress: 25,
         tasks: [
-          { id: '2a', title: 'Master thought record technique', completed: true },
-          { id: '2b', title: 'Practice cognitive restructuring daily', completed: true },
-          { id: '2c', title: 'Apply skills in real situations', completed: false },
-          { id: '2d', title: 'Reduce automatic negative thoughts', completed: false }
-        ]
-      },
-      {
-        id: '3',
-        title: 'Emotional Regulation',
-        description: 'Develop healthy ways to process and manage emotions',
-        status: 'in-progress',
-        dueDate: '2024-03-15',
-        progress: 30,
-        tasks: [
-          { id: '3a', title: 'Learn emotion identification techniques', completed: true },
-          { id: '3b', title: 'Practice mindfulness meditation', completed: false },
-          { id: '3c', title: 'Develop distress tolerance skills', completed: false },
-          { id: '3d', title: 'Create emotion regulation toolkit', completed: false }
-        ]
-      },
-      {
-        id: '4',
-        title: 'Social Connection & Communication',
-        description: 'Build meaningful relationships and improve communication skills',
-        status: 'upcoming',
-        dueDate: '2024-04-15',
-        progress: 0,
-        tasks: [
-          { id: '4a', title: 'Practice assertiveness techniques', completed: false },
-          { id: '4b', title: 'Engage in social activities', completed: false },
-          { id: '4c', title: 'Strengthen support network', completed: false }
+          { id: '1a', title: 'Complete initial assessment', completed: false },
+          { id: '1b', title: 'Set wellness goals', completed: false }
         ]
       }
     ]);
 
-    // Load next appointment
-    setNextAppointment({
-      id: '1',
-      date: '2024-01-18',
-      time: '2:30 PM',
-      duration: 60,
-      type: 'individual',
-      therapist: {
-        name: 'Dr. Sarah Chen',
-        title: 'Licensed Clinical Psychologist',
-        avatar: '/api/placeholder/40/40'
-      },
-      focus: 'Cognitive Behavioral Therapy - Thought Challenging',
-      location: 'video',
-      notes: 'We\'ll work on identifying automatic thoughts and developing more balanced thinking patterns.'
-    });
+    // Load next appointment - will be set by therapist
+    setNextAppointment(null);
 
-    // Load recent messages
-    setMessages([
-      {
-        id: '1',
-        content: 'Hi! I wanted to check in about your progress with the morning meditation. How has it been going this week?',
-        timestamp: new Date(Date.now() - 86400000).toISOString(),
-        sender: 'therapist',
-        read: true
-      },
-      {
-        id: '2',
-        content: 'It\'s been going really well! I\'ve managed to do it 7 days in a row. I feel more centered in the mornings.',
-        timestamp: new Date(Date.now() - 82800000).toISOString(),
-        sender: 'user',
-        read: true
-      },
-      {
-        id: '3',
-        content: 'That\'s wonderful! A 7-day streak is excellent. How are you finding the cognitive restructuring exercises?',
-        timestamp: new Date(Date.now() - 3600000).toISOString(),
-        sender: 'therapist',
-        read: false
-      }
-    ]);
+    // Load recent messages - will be populated by real conversations
+    setMessages([]);
   };
 
   const completeExercise = (exerciseId: string) => {

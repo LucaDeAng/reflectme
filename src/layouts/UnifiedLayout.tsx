@@ -29,7 +29,7 @@ interface UnifiedLayoutProps {
 }
 
 const UnifiedLayout: React.FC<UnifiedLayoutProps> = ({ children }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -37,17 +37,19 @@ const UnifiedLayout: React.FC<UnifiedLayoutProps> = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Redirect logic
-  React.useEffect(() => {
-    if (!user) {
+  useEffect(() => {
+    if (!loading && !user) {
       navigate('/login');
     }
-  }, [user, navigate]);
+  }, [loading, user, navigate]);
 
   useEffect(() => {
     // Simulate loading state for smooth transitions
     setTimeout(() => setIsLoading(false), 300);
   }, [location.pathname]);
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (!user) return null; // Or a fallback UI
 
   // Get navigation items based on user role
   const getNavItems = (): NavItem[] => {

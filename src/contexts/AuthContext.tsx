@@ -92,7 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           id: authUser.id,
           name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
           email: authUser.email || '',
-          role: role as 'therapist' | 'patient' | 'admin',
+          role: (authUser.user_metadata?.role || role) as 'therapist' | 'patient' | 'admin',
           avatar: `https://api.dicebear.com/7.x/personas/svg?seed=${authUser.email}`,
           isDemo: false,
         };
@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: profile.id,
         name: profile.name || (profile.first_name + ' ' + profile.last_name).trim(),
         email: authUser.email || '',
-          role: profile.role || role as 'therapist' | 'patient' | 'admin',
+        role: (authUser.user_metadata?.role || profile.role || role) as 'therapist' | 'patient' | 'admin',
         avatar: profile.avatar_url || `https://api.dicebear.com/7.x/personas/svg?seed=${authUser.email}`,
         isDemo: false,
       };
@@ -113,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: authUser.id,
         name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
         email: authUser.email || '',
-          role: role as 'therapist' | 'patient' | 'admin',
+        role: (authUser.user_metadata?.role || role) as 'therapist' | 'patient' | 'admin',
         avatar: `https://api.dicebear.com/7.x/personas/svg?seed=${authUser.email}`,
         isDemo: false,
       };

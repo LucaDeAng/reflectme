@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { GeminiAIService } from '../services/geminiAIService';
+import { fetchClientChatHistory, fetchTherapistChatHistory } from '../services/chatHistoryService';
 
 // Types
 export interface ChatMessage {
@@ -55,7 +56,7 @@ export interface MoodEntry {
   mood: number;
   trigger?: string;
   notes?: string;
-  context: 'chat' | 'manual' | 'session';
+  context: 'chat' | 'manual' | 'session' | 'demo';
 }
 
 interface ZentiaContextType {
@@ -77,13 +78,19 @@ interface ZentiaContextType {
   
   // Progress
   getProgressData: () => { date: string; mood: number }[];
+  
+  // Chat storica separata
+  clientChatHistory: ChatMessage[];
+  therapistChatHistory: ChatMessage[];
+  fetchAndSetClientChatHistory: (clientId: string) => Promise<ChatMessage[]>;
+  fetchAndSetTherapistChatHistory: (clientId: string) => Promise<ChatMessage[]>;
 }
 
 const ZentiaContext = createContext<ZentiaContextType | undefined>(undefined);
 
 export const useZentia = () => {
   const context = useContext(ZentiaContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error('useZentia must be used within a ZentiaProvider');
   }
   return context;
@@ -91,7 +98,7 @@ export const useZentia = () => {
 
 // Removed unused initializeGemini function - now handled in GeminiAIService
 
-// Mock data
+// Simplified mock data for demo purposes only
 const mockCopingTools: CopingTool[] = [
   {
     id: '1',
@@ -101,11 +108,9 @@ const mockCopingTools: CopingTool[] = [
     duration: '2-3 minutes',
     steps: [
       'Sit comfortably with your back straight',
-      'Exhale completely through your mouth',
-      'Close your mouth and inhale through your nose for 4 counts',
+      'Inhale through your nose for 4 counts',
       'Hold your breath for 7 counts',
-      'Exhale through your mouth for 8 counts',
-      'Repeat 3-4 times'
+      'Exhale through your mouth for 8 counts'
     ],
     isRecommended: true,
     therapistApproved: true,
@@ -125,138 +130,59 @@ const mockCopingTools: CopingTool[] = [
     ],
     isRecommended: true,
     therapistApproved: true,
-  },
-  {
-    id: '3',
-    title: 'Progressive Muscle Relaxation',
-    description: 'Systematically tense and relax muscle groups to reduce physical tension',
-    category: 'physical',
-    duration: '10-15 minutes',
-    steps: [
-      'Find a comfortable position',
-      'Start with your toes - tense for 5 seconds, then relax',
-      'Move up to your calves, thighs, abdomen',
-      'Continue with arms, shoulders, neck, and face',
-      'Notice the contrast between tension and relaxation',
-      'End with deep breathing'
-    ],
-    isRecommended: false,
-    therapistApproved: true,
-  },
-  {
-    id: '4',
-    title: 'Thought Challenging',
-    description: 'Examine and reframe negative thought patterns',
-    category: 'cognitive',
-    duration: '5-10 minutes',
-    steps: [
-      'Identify the negative thought',
-      'Ask: Is this thought realistic?',
-      'What evidence supports or contradicts it?',
-      'What would you tell a friend in this situation?',
-      'Create a more balanced, realistic thought',
-      'Practice the new thought'
-    ],
-    isRecommended: true,
-    therapistApproved: true,
-  },
-  {
-    id: '5',
-    title: 'Mindful Body Scan',
-    description: 'Bring awareness to different parts of your body',
-    category: 'mindfulness',
-    duration: '8-12 minutes',
-    steps: [
-      'Lie down or sit comfortably',
-      'Close your eyes and take deep breaths',
-      'Start at the top of your head',
-      'Slowly move attention down through your body',
-      'Notice any sensations without judgment',
-      'End by noticing your whole body'
-    ],
-    isRecommended: false,
-    therapistApproved: true,
-  },
+  }
 ];
 
 const mockSessionRecaps: SessionRecap[] = [
   {
     id: '1',
-    date: '2024-01-15',
-    title: 'Anxiety Management Strategies',
+    date: new Date().toISOString().split('T')[0],
+    title: 'Demo Session',
     keyTakeaways: [
-      'Identified work presentations as a major anxiety trigger',
-      'Learned about the connection between thoughts and physical sensations',
-      'Practiced breathing techniques during the session'
+      'Explored coping strategies for daily challenges',
+      'Practiced mindfulness techniques'
     ],
     therapistSuggestions: [
-      'Practice 4-7-8 breathing daily, especially before presentations',
-      'Keep a thought journal to track anxiety patterns',
-      'Use grounding techniques when feeling overwhelmed'
+      'Continue daily breathing exercises',
+      'Practice grounding when feeling overwhelmed'
     ],
     actionItems: [
-      'Practice breathing exercises twice daily',
-      'Complete thought record worksheet',
-      'Try one grounding technique this week'
-    ],
-    moodBefore: 3,
-    moodAfter: 6
-  },
-  {
-    id: '2',
-    date: '2024-01-10',
-    title: 'Sleep Hygiene and Routine',
-    keyTakeaways: [
-      'Poor sleep is affecting mood and anxiety levels',
-      'Screen time before bed disrupts sleep quality',
-      'Established connection between sleep and daily functioning'
-    ],
-    therapistSuggestions: [
-      'Create a consistent bedtime routine',
-      'Avoid screens 1 hour before sleep',
-      'Try progressive muscle relaxation for better sleep'
-    ],
-    actionItems: [
-      'Set phone to "Do Not Disturb" mode at 9 PM',
-      'Practice bedtime routine for one week',
-      'Track sleep quality in journal'
+      'Practice breathing exercises',
+      'Use grounding techniques'
     ],
     moodBefore: 4,
-    moodAfter: 5
-  },
-  {
-    id: '3',
-    date: '2024-01-05',
-    title: 'Relationship Communication',
-    keyTakeaways: [
-      'Difficulty expressing needs in close relationships',
-      'Tendency to avoid conflict leads to resentment',
-      'Learned "I" statements for better communication'
-    ],
-    therapistSuggestions: [
-      'Practice "I" statements daily',
-      'Schedule regular check-ins with partner',
-      'Use grounding when feeling defensive'
-    ],
-    actionItems: [
-      'Have one important conversation using "I" statements',
-      'Notice when avoiding difficult topics',
-      'Practice active listening techniques'
-    ],
-    moodBefore: 5,
-    moodAfter: 7
+    moodAfter: 6
   }
 ];
 
-const mockMoodEntries: MoodEntry[] = [
-  { id: '1', date: '2024-01-20', mood: 7, context: 'chat', notes: 'Feeling better after talking through anxiety' },
-  { id: '2', date: '2024-01-19', mood: 4, trigger: 'Work stress', context: 'manual' },
-  { id: '3', date: '2024-01-18', mood: 6, context: 'manual' },
-  { id: '4', date: '2024-01-17', mood: 5, trigger: 'Relationship conflict', context: 'chat' },
-  { id: '5', date: '2024-01-16', mood: 8, context: 'session', notes: 'Great session today' },
-  { id: '6', date: '2024-01-15', mood: 6, context: 'session' },
-  { id: '7', date: '2024-01-14', mood: 3, trigger: 'Financial worries', context: 'manual' },
-];
+// Generate more realistic mock mood data for better insights
+const generateMockMoodEntries = (): MoodEntry[] => {
+  const entries: MoodEntry[] = [];
+  const today = new Date();
+  
+  // Generate 14 days of mock data for better trend analysis
+  for (let i = 13; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+    
+    // Create realistic mood patterns (slight variations)
+    const baseMood = 6; // Average mood
+    const variation = Math.random() * 3 - 1.5; // -1.5 to +1.5 variation
+    const mood = Math.max(1, Math.min(10, Math.round(baseMood + variation)));
+    
+    entries.push({
+      id: `mock_${i}`,
+      date: date.toISOString().split('T')[0],
+      mood: mood,
+      context: 'demo',
+      trigger: i % 3 === 0 ? ['work stress', 'good sleep', 'exercise', 'social time'][Math.floor(Math.random() * 4)] : undefined
+    });
+  }
+  
+  return entries;
+};
+
+const mockMoodEntries: MoodEntry[] = generateMockMoodEntries();
 
 export const ZentiaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
@@ -270,24 +196,23 @@ export const ZentiaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   ]);
   const [isGeneratingResponse, setIsGeneratingResponse] = useState(false);
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>(mockMoodEntries);
+  // Stato per chat storica separata
+  const [clientChatHistory, setClientChatHistory] = useState<ChatMessage[]>([]);
+  const [therapistChatHistory, setTherapistChatHistory] = useState<ChatMessage[]>([]);
 
-  const addMessage = (message: Omit<ChatMessage, 'id'>): ChatMessage => {
-    const newMessage: ChatMessage = {
-      ...message,
-      id: Date.now().toString(),
-    };
-    
-    setChatHistory(prev => [...prev, newMessage]);
+  // Funzioni per fetch separato
+  const fetchAndSetClientChatHistory = useCallback(async (clientId: string) => {
+    const history = await fetchClientChatHistory(clientId);
+    setClientChatHistory(history);
+    return history;
+  }, []);
+  const fetchAndSetTherapistChatHistory = useCallback(async (clientId: string) => {
+    const history = await fetchTherapistChatHistory(clientId);
+    setTherapistChatHistory(history);
+    return history;
+  }, []);
 
-    // If it's a user message, generate AI response
-    if (message.sender === 'user') {
-      generateAIResponse(message.content);
-    }
-
-    return newMessage;
-  };
-
-  const generateAIResponse = async (userMessage: string) => {
+  const generateAIResponse = useCallback(async (userMessage: string) => {
     setIsGeneratingResponse(true);
     
     try {
@@ -338,21 +263,37 @@ export const ZentiaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } finally {
       setIsGeneratingResponse(false);
     }
-  };
+  }, [moodEntries, user?.id]);
 
-  const getRecommendedTools = (): CopingTool[] => {
+  const addMessage = useCallback((message: Omit<ChatMessage, 'id'>): ChatMessage => {
+    const newMessage: ChatMessage = {
+      ...message,
+      id: Date.now().toString(),
+    };
+    
+    setChatHistory(prev => [...prev, newMessage]);
+
+    // If it's a user message, generate AI response
+    if (message.sender === 'user') {
+      generateAIResponse(message.content);
+    }
+
+    return newMessage;
+  }, [generateAIResponse]);
+
+  const getRecommendedTools = useCallback((): CopingTool[] => {
     return mockCopingTools.filter(tool => tool.isRecommended);
-  };
+  }, []);
 
-  const addMoodEntry = (entry: Omit<MoodEntry, 'id'>): void => {
+  const addMoodEntry = useCallback((entry: Omit<MoodEntry, 'id'>): void => {
     const newEntry: MoodEntry = {
       ...entry,
       id: Date.now().toString(),
     };
     setMoodEntries(prev => [...prev, newEntry]);
-  };
+  }, []);
 
-  const getProgressData = () => {
+  const getProgressData = useCallback(() => {
     return moodEntries
       .slice(-30) // Last 30 entries
       .map(entry => ({
@@ -360,9 +301,9 @@ export const ZentiaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         mood: entry.mood
       }))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  };
+  }, [moodEntries]);
 
-  const value: ZentiaContextType = {
+  const value: ZentiaContextType = React.useMemo(() => ({
     chatHistory,
     addMessage,
     isGeneratingResponse,
@@ -372,7 +313,13 @@ export const ZentiaProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     moodEntries,
     addMoodEntry,
     getProgressData,
-  };
+    clientChatHistory,
+    therapistChatHistory,
+    fetchAndSetClientChatHistory,
+    fetchAndSetTherapistChatHistory,
+  }), [chatHistory, addMessage, isGeneratingResponse, moodEntries, getRecommendedTools, addMoodEntry, getProgressData, clientChatHistory, therapistChatHistory, fetchAndSetClientChatHistory, fetchAndSetTherapistChatHistory]);
+
+
 
   return (
     <ZentiaContext.Provider value={value}>

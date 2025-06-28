@@ -178,11 +178,16 @@ const Register: React.FC = () => {
       
       await register(formData.name, formData.email, formData.password, formData.role);
       
-      // Try to sign in after registration
-      await login(formData.email, formData.password);
+      // Removed automatic login - let user sign in manually
+      // await login(formData.email, formData.password);
       
-      // Navigate to welcome page instead of direct dashboard
-      navigate('/welcome', { state: { newUser: true, role: formData.role } });
+      // Navigate to login page with success message
+      navigate('/login', { 
+        state: { 
+          message: 'Account created successfully! Please sign in with your credentials.',
+          email: formData.email 
+        } 
+      });
       
     } catch (err) {
       let errorMessage = 'Failed to create account. Please try again.';

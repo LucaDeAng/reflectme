@@ -76,51 +76,8 @@ export const MicroWinsCard: React.FC<MicroWinsCardProps> = ({
   };
   
   const createDemoMicroWins = () => {
-    // Demo micro wins for immediate display
-    const demoWins: MicroWin[] = [
-      {
-        id: 'demo-1',
-        win_text: "I managed to complete my morning routine without rushing today",
-        detected_from: 'journal',
-        confidence_score: 0.85,
-        celebrated: false,
-        detected_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() // 2 hours ago
-      },
-      {
-        id: 'demo-2', 
-        win_text: "I had a meaningful conversation with a friend and felt more connected",
-        detected_from: 'chat',
-        confidence_score: 0.92,
-        celebrated: true,
-        detected_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() // 1 day ago
-      },
-      {
-        id: 'demo-3',
-        win_text: "I took time for self-care and practiced mindfulness for 10 minutes",
-        detected_from: 'manual',
-        confidence_score: 0.78,
-        celebrated: false,
-        detected_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString() // 4 hours ago
-      },
-      {
-        id: 'demo-4',
-        win_text: "I reached out for help when I needed it instead of struggling alone",
-        detected_from: 'assessment_note',
-        confidence_score: 0.88,
-        celebrated: true,
-        detected_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString() // 2 days ago
-      },
-      {
-        id: 'demo-5',
-        win_text: "I completed a small task that I had been avoiding for weeks",
-        detected_from: 'journal',
-        confidence_score: 0.76,
-        celebrated: false,
-        detected_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString() // 6 hours ago
-      }
-    ];
-    
-    setMicroWins(demoWins);
+    // For demo accounts, start with an empty state to encourage real usage
+    setMicroWins([]);
     setLoading(false);
   };
   
