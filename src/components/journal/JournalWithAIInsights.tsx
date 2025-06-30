@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { EnhancedAICompanion, CopingSuggestion, logJournalEntry } from '../../services/enhancedAICompanion';
 import { useAuth } from '../../contexts/AuthContext';
-import { PenTool, Brain, Lightbulb, TrendingUp, BookOpen } from 'lucide-react';
+import { PenTool, Brain, Lightbulb, TrendingUp, BookOpen, Sparkles, Target, Clock } from 'lucide-react';
+import { logJournalEntryMCP, convertToUUID } from '../../services/mcpService';
+import { supabase } from '../../lib/supabase';
 
 interface JournalWithAIInsightsProps {
   onEntrySubmitted?: (content: string, insights: string[], suggestions: CopingSuggestion[]) => void;
@@ -70,21 +72,53 @@ const JournalWithAIInsights: React.FC<JournalWithAIInsightsProps> = ({
   };
 
   const handleSaveEntry = async () => {
-    // First analyze if not already done
-    if (!analysisComplete && content.length >= 20) {
-      await analyzeJournalEntry();
+    if (!user?.id || content.length < 10) return;
+
+    try {
+      // First analyze if not already done
+      if (!analysisComplete && content.length >= 20) {
+        await analyzeJournalEntry();
+      }
+
+      // Convert user ID to UUID format for database
+      const userUUID = convertToUUID(user.id);
+      
+      // Save to Supabase using direct insert (more reliable than MCP for now)
+      const { data, error } = await supabase
+        .from('journal_entries')
+        .insert({
+          user_id: userUUID,
+          content: content.trim(),
+          mood_score: null, // Can be set if we have mood data
+          tags: [], // Can be extracted from AI insights
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error saving journal entry:', error);
+        throw error;
+      }
+
+      console.log('✅ Journal entry saved successfully:', data);
+
+      // Also log via MCP for backup/analytics
+      await logJournalEntryMCP(userUUID, content, undefined, []);
+
+      // Clear the form
+      setContent('');
+      setAiInsights([]);
+      setSuggestions([]);
+      setShowAnalysis(false);
+      setAnalysisComplete(false);
+      setSelectedPrompt(null);
+
+    } catch (error) {
+      console.error('❌ Failed to save journal entry:', error);
+      // Show user-friendly error message
+      alert('Failed to save journal entry. Please try again.');
     }
-    // Save to database
-    if (user?.id) {
-      await logJournalEntry(user.id, content, undefined, []);
-    }
-    // Clear the form
-    setContent('');
-    setAiInsights([]);
-    setSuggestions([]);
-    setShowAnalysis(false);
-    setAnalysisComplete(false);
-    setSelectedPrompt(null);
   };
 
   const wordCount = content.trim().split(/\s+/).filter(word => word.length > 0).length;

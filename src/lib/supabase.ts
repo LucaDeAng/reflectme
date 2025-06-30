@@ -167,8 +167,9 @@ function initializeSupabase() {
   }
 }
 
-// Initialize and export Supabase client
-export const supabase = initializeSupabase();
+// Ensure single Supabase instance across HMR reloads
+export const supabase = (globalThis as any).__supabase__ ?? initializeSupabase();
+(globalThis as any).__supabase__ = supabase;
 
 // Utility function for safe Supabase operations
 export async function safeSupabaseOperation<T>(

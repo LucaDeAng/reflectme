@@ -18,6 +18,7 @@ import {
   AlertCircle,
   Loader2
 } from 'lucide-react';
+import { convertToUUID } from '../../services/mcpService';
 
 interface PatientMonitoringFormProps {
   onSubmitSuccess?: () => void;
@@ -65,33 +66,73 @@ export const PatientMonitoringForm: React.FC<PatientMonitoringFormProps> = ({
       setSubmitStatus('idle');
       setErrorMessage('');
 
-      // Map form data to database schema
+      const userUUID = convertToUUID(user.id);
+
+      // Map exercise duration to minutes
+      const getExerciseMinutes = (duration: string): number => {
+        switch (duration) {
+          case 'none': return 0;
+          case 'under15': return 10;
+          case 'under30': return 22;
+          case 'above30': return 45;
+          default: return 0;
+        }
+      };
+
+      // Create monitoring entry for Supabase
       const monitoringEntry = {
-        client_id: user.id,
-        mood_rating: data.waterIntake, // Map water intake to mood rating for demo
-        energy_level: data.sunlightExposure, // Map sunlight to energy level
-        sleep_quality: data.healthyMeals, // Map healthy meals to sleep quality
+        client_id: userUUID,
+        mood_rating: data.waterIntake, // Using water intake as proxy for mood
+        energy_level: data.sunlightExposure,
+        sleep_quality: data.sleepHours,
         stress_level: Math.max(1, 11 - data.socialInteractions), // Inverse of social interactions
-        anxiety_level: Math.max(1, 11 - data.sunlightExposure), // Inverse of sunlight
+        anxiety_level: Math.max(1, 11 - data.healthyMeals), // Inverse of healthy meals
         sleep_hours: data.sleepHours,
-        exercise_minutes: data.exerciseDuration === 'none' ? 0 :
-                         data.exerciseDuration === 'light' ? 15 :
-                         data.exerciseDuration === 'moderate' ? 30 :
-                         data.exerciseDuration === 'intense' ? 60 : 0,
+        exercise_minutes: getExerciseMinutes(data.exerciseDuration),
         social_interaction: data.socialInteractions > 5,
         journal_entry: data.taskNotes || null,
         gratitude_note: data.taskRemarks || null,
         task_notes: data.taskNotes || null,
         task_remarks: data.taskRemarks || null,
-        entry_date: data.date.toISOString().split('T')[0]
+        entry_date: data.date.toISOString().split('T')[0],
+        created_at: new Date().toISOString()
       };
 
-      // For demo purposes, we'll just simulate the submission
-      // In production, this would save to the database
-      console.log('📊 Demo monitoring data:', monitoringEntry);
-      
-      // Simulate a brief delay for realism
-      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log('💾 Saving monitoring entry to Supabase:', monitoringEntry);
+
+      // Save to Supabase monitoring_entries table
+      const { data: savedEntry, error } = await supabase
+        .from('monitoring_entries')
+        .insert(monitoringEntry)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Supabase error:', error);
+        throw new Error(`Failed to save monitoring data: ${error.message}`);
+      }
+
+      console.log('✅ Monitoring entry saved successfully:', savedEntry);
+
+      // Also save individual mood entry for historical tracking
+      const moodEntry = {
+        user_id: userUUID,
+        mood_score: data.waterIntake,
+        trigger: data.taskNotes ? 'daily_monitoring' : null,
+        notes: data.taskRemarks || null,
+        created_at: new Date().toISOString()
+      };
+
+      const { error: moodError } = await supabase
+        .from('mood_entries')
+        .insert(moodEntry);
+
+      if (moodError) {
+        console.warn('⚠️ Could not save mood entry:', moodError);
+        // Don't fail the whole operation for this
+      } else {
+        console.log('✅ Mood entry also saved');
+      }
 
       setSubmitStatus('success');
       reset();
@@ -101,7 +142,7 @@ export const PatientMonitoringForm: React.FC<PatientMonitoringFormProps> = ({
       setTimeout(() => setSubmitStatus('idle'), 3000);
 
     } catch (error) {
-      console.error('Error submitting monitoring form:', error);
+      console.error('❌ Error submitting monitoring form:', error);
       setErrorMessage(error instanceof Error ? error.message : 'Failed to submit monitoring data');
       setSubmitStatus('error');
     } finally {

@@ -11,6 +11,7 @@ import {
   handleAPIResponse,
   isNetworkError
 } from '../utils/errorHandling';
+import { getFullUserContext, ComprehensiveUserContext } from './userContextAggregator'; // Import context functions
 
 // Inizializzazione Gemini con controllo errori
 const initializeGemini = () => {
@@ -91,6 +92,150 @@ export interface ChatResponse {
 export class GeminiAIService {
   private static getModel() {
     return initializeGemini();
+  }
+
+  /**
+   * 💬 Generates a context-aware response using the full user history.
+   * This is the new, primary method for handling chat.
+   */
+  static async generateContextAwareResponse(
+    userMessage: string,
+    chatHistory: { role: 'user' | 'model'; parts: { text: string }[] }[],
+    userId?: string
+  ): Promise<string> {
+    const { logger } = Sentry;
+    
+    return Sentry.startSpan(
+      {
+        op: "ai.chat_generation_contextual",
+        name: "Generate Context-Aware Chat Response",
+      },
+      async (span) => {
+        span.setAttribute("message_length", userMessage.length);
+        span.setAttribute("has_user_id", !!userId);
+
+        const { data: response, error } = await safeAsync(async () => {
+          if (!userMessage || userMessage.trim().length === 0) {
+            throw new AppError('Message is required', ErrorType.VALIDATION, ErrorSeverity.MEDIUM);
+          }
+
+          const model = this.getModel();
+          if (!model) {
+            return "I'm having a little trouble connecting right now. Please try again in a moment.";
+          }
+
+          let userContext: ComprehensiveUserContext | null = null;
+          if (userId) {
+            const { data: context, error: contextError } = await safeAsync(() => getFullUserContext(userId));
+            
+            if (contextError) {
+              logError(new AppError(
+                `Failed to fetch user context: ${contextError.message}`,
+                ErrorType.DATABASE,
+                ErrorSeverity.MEDIUM, // Reduced severity - don't fail completely
+                { userId }
+              ));
+              span.setAttribute("context_fetch_failed", true);
+              // Continue without context instead of failing completely
+              console.warn("Continuing without user context due to fetch error:", contextError.message);
+            } else {
+              userContext = context;
+              span.setAttribute("context_fetched", true);
+
+              // Fallback: if context is still null, fetch basic profile directly
+              if (!userContext) {
+                const { data: profileRow, error: profileErr } = await supabase
+                  .from('profiles')
+                  .select('*')
+                  .eq('id', userId)
+                  .single();
+
+                if (!profileErr && profileRow) {
+                  userContext = { profile: profileRow } as unknown as ComprehensiveUserContext;
+                  span.setAttribute("profile_fallback", true);
+                }
+              }
+            }
+          }
+
+          const systemPrompt = this.buildSystemPrompt(userContext);
+          
+          const history = [
+            ...chatHistory,
+            { role: 'user', parts: [{ text: userMessage }] }
+          ];
+
+          const result = await model.generateContent({
+            contents: history,
+            systemInstruction: {
+              role: "system",
+              parts: [{ text: systemPrompt }],
+            },
+          });
+          
+          const aiResponse = result.response.text();
+          span.setAttribute("response_length", aiResponse.length);
+          logger.info("Successfully generated context-aware response");
+          return aiResponse;
+        });
+
+        if (error) {
+          logError(error, { action: 'generateContextAwareResponse', component: 'GeminiAIService' });
+          return "I'm sorry, I encountered an issue while processing your request. Let's try that again.";
+        }
+        return response!;
+      }
+    );
+  }
+
+  /**
+   * Builds a detailed system prompt for the AI based on the user's context.
+   */
+  private static buildSystemPrompt(context: ComprehensiveUserContext | null): string {
+    if (!context || !context.profile) {
+      return `You are Zentia, a friendly and supportive AI mental health companion. You are not a therapist. Your goal is to provide support, offer coping strategies, and help users reflect on their journey between therapy sessions. Be empathetic, encouraging, and concise.`;
+    }
+
+    const { profile, journal_entries, mood_entries, therapy_sessions, user_preferences } = context;
+    const preferredName = profile.preferred_name || profile.first_name;
+
+    let prompt = `You are Zentia, a supportive AI mental health companion talking to ${preferredName}.\n`;
+    prompt += `Your primary goal is to be empathetic, helpful, and aware of the user's history, but you are NOT a therapist.\n`;
+    prompt += `Keep your responses concise and natural.\n\n`;
+    prompt += `USER PROFILE:\n- Name: ${preferredName}\n`;
+    if (user_preferences) {
+      prompt += `- Communication Style: ${user_preferences.communication_style}\n`;
+      prompt += `- Therapy Goals: ${user_preferences.therapy_goals.join(', ')}\n`;
+    }
+
+    if (mood_entries && mood_entries.length > 0) {
+      const lastMood = mood_entries[0];
+      prompt += `\nRECENT MOOD:\n- Last recorded mood: ${lastMood.mood_score}/10 on ${new Date(lastMood.created_at).toLocaleDateString()}.\n`;
+      if (lastMood.notes) prompt += `- Notes: "${lastMood.notes}"\n`;
+    }
+
+    if (journal_entries && journal_entries.length > 0) {
+      prompt += `\nRECENT JOURNAL ENTRIES (Provide short summaries or direct quotes if asked):\n`;
+      journal_entries.slice(0, 3).forEach(entry => {
+        prompt += `- On ${new Date(entry.created_at).toLocaleDateString()}: "${entry.content.substring(0, 100)}..."\n`;
+      });
+    }
+
+    if (therapy_sessions && therapy_sessions.length > 0) {
+      const lastSession = therapy_sessions[0];
+      prompt += `\nLAST THERAPY SESSION (${new Date(lastSession.session_date).toLocaleDateString()}):\n`;
+      prompt += `- Goals discussed: ${lastSession.goals.join(', ')}\n`;
+      if(lastSession.homework_assigned && lastSession.homework_assigned.length > 0) {
+        prompt += `- Homework: ${lastSession.homework_assigned.join(', ')}\n`;
+      }
+    }
+    
+    prompt += `\nINSTRUCTIONS:\n1. Use the user's name, ${preferredName}, naturally in conversation.\n`;
+    prompt += `2. If asked about journal entries or mood, use the information above to give specific, not generic, answers.\n`;
+    prompt += `3. Proactively and subtly reference goals or past topics when relevant.\n`;
+    prompt += `4. Maintain a supportive, non-clinical tone. Prioritize safety and encourage professional help for serious issues.`;
+
+    return prompt;
   }
 
   /**

@@ -5,11 +5,15 @@ import { useTherapy } from '../../contexts/TherapyContext';
 import { Tag, X, Save, ArrowLeft, Plus, Brain } from 'lucide-react';
 import { AINotesAnalysis } from '../../components/therapist/AINotesAnalysis';
 import { getClientDisplayName } from '../../utils/clientUtils';
+import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
+import { convertToUUID } from '../../services/mcpService';
 
 const Notes: React.FC = () => {
   const { clientId } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
-  const { getClient, addNote } = useTherapy();
+  const { getClient } = useTherapy();
+  const { user } = useAuth();
   const client = getClient(clientId || '');
   
   const [title, setTitle] = useState('');
@@ -20,6 +24,7 @@ const Notes: React.FC = () => {
   const [showTagPopup, setShowTagPopup] = useState(false);
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
   const [showAIAnalysis, setShowAIAnalysis] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   if (!client && !clientId) {
     return (
@@ -34,24 +39,79 @@ const Notes: React.FC = () => {
   const displayName = client?.name || getClientDisplayName(clientId || '');
   const actualClientId = clientId || client?.id || '';
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!title.trim() || !content.trim()) {
       alert('Please fill in all required fields');
       return;
     }
-    
-    if (client) {
-      addNote(client.id, {
-        date: new Date().toISOString().split('T')[0],
-        title,
-        content,
-        tags,
-      });
+
+    if (!user?.id) {
+      alert('User not authenticated');
+      return;
     }
-    
-    navigate(`/therapist/client/${actualClientId}`);
+
+    try {
+      setIsSaving(true);
+
+      const therapistUUID = convertToUUID(user.id);
+      const clientUUID = convertToUUID(actualClientId);
+
+      // Save therapy note to Supabase
+      const therapyNote = {
+        therapist_id: therapistUUID,
+        client_id: clientUUID,
+        session_date: new Date().toISOString().split('T')[0],
+        session_type: 'therapy_session',
+        notes: content,
+        goals: [], // Could be extracted from content
+        interventions: [title], // Using title as intervention
+        homework_assigned: [], // Could be extracted from content
+        next_session_focus: null,
+        session_rating: null,
+        created_at: new Date().toISOString()
+      };
+
+      const { data: savedNote, error } = await supabase
+        .from('therapy_sessions')
+        .insert(therapyNote)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error saving therapy note:', error);
+        throw new Error(`Failed to save therapy note: ${error.message}`);
+      }
+
+      console.log('✅ Therapy note saved successfully:', savedNote);
+
+      // Also save as a general note for backup
+      const generalNote = {
+        user_id: clientUUID,
+        content: `${title}\n\n${content}`,
+        tags: tags,
+        created_at: new Date().toISOString()
+      };
+
+      const { error: noteError } = await supabase
+        .from('notes')
+        .insert(generalNote);
+
+      if (noteError) {
+        console.warn('⚠️ Could not save general note:', noteError);
+        // Don't fail the whole operation
+      }
+
+      // Navigate back to client details
+      navigate(`/therapist/client/${actualClientId}`);
+
+    } catch (error) {
+      console.error('❌ Failed to save therapy note:', error);
+      alert('Failed to save therapy note. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
   
   const addTagToList = () => {
@@ -264,15 +324,17 @@ const Notes: React.FC = () => {
               type="button"
               onClick={() => navigate(`/therapist/client/${actualClientId}`)}
               className="btn btn-outline"
+              disabled={isSaving}
             >
               Annulla
             </button>
             <button
               type="submit"
               className="btn btn-primary flex items-center"
+              disabled={isSaving}
             >
               <Save className="w-4 h-4 mr-2" />
-              Salva Nota
+              {isSaving ? 'Salvando...' : 'Salva Nota'}
             </button>
           </div>
         </form>

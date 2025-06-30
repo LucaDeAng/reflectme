@@ -26,6 +26,7 @@ import MoodTrackerWithAI from '../../components/mood/MoodTrackerWithAI';
 import { EnhancedAICompanionMCP } from '../../services/enhancedAICompanionMCP';
 import * as Sentry from "@sentry/react";
 import ClientChatHistory from '../../components/chat/ClientChatHistory';
+import { useZentia } from '../../contexts/ZentiaContext';
 
 const PatientDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -34,12 +35,7 @@ const PatientDashboard: React.FC = () => {
   const [selectedMood, setSelectedMood] = useState<number | null>(null);
   const [showProactiveSupport, setShowProactiveSupport] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [todayStats, setTodayStats] = useState({
-    journalEntries: 2,
-    moodScore: 7.2,
-    streakDays: 12,
-    aiInteractions: 5
-  });
+  const { moodEntries, chatHistory } = useZentia();
 
   // Track dashboard access
   useEffect(() => {
@@ -81,6 +77,27 @@ const PatientDashboard: React.FC = () => {
     checkProactiveSupport();
   }, []);
 
+  const calculateStats = () => {
+    const journalEntries = moodEntries.filter((e) => e.context === 'manual').length;
+    const aiInteractions = chatHistory.filter((m) => m.sender === 'user').length;
+    const uniqueDays = new Set(moodEntries.map((e) => new Date(e.date).toDateString())).size;
+    const avgMood = moodEntries.length
+      ? moodEntries.reduce((sum, e) => sum + (e.mood || 0), 0) / moodEntries.length
+      : 0;
+    return {
+      journalEntries,
+      moodScore: Number(avgMood.toFixed(1)),
+      streakDays: uniqueDays,
+      aiInteractions
+    };
+  };
+
+  const [todayStats, setTodayStats] = useState(calculateStats());
+
+  useEffect(() => {
+    setTodayStats(calculateStats());
+  }, [moodEntries, chatHistory]);
+
   const handleMoodSelection = async (mood: number) => {
     setSelectedMood(mood);
     
@@ -100,7 +117,8 @@ const PatientDashboard: React.FC = () => {
     }
   };
 
-  const killerFunctions = [
+  const killerFunctions = React.useMemo(() => {
+    return [
     {
       id: 'ai-companion',
       title: '🤖 AI Companion',
@@ -108,10 +126,14 @@ const PatientDashboard: React.FC = () => {
       value: 'Get instant support and guidance 24/7',
       href: '/client/chat',
       color: 'from-blue-500 to-purple-600',
-      stats: { sessions: 23, satisfaction: '94%', lastUsed: '2 hrs ago' },
+        stats: {
+          sessions: todayStats.aiInteractions,
+          satisfaction: todayStats.aiInteractions ? '—' : '—',
+          lastUsed: todayStats.aiInteractions ? 'Just now' : 'Never'
+        },
       cta: 'Start Chat',
       features: ['Mood support', 'Coping strategies', 'Emotional guidance'],
-      badge: '2 new'
+        badge: todayStats.aiInteractions ? `${todayStats.aiInteractions} new` : undefined
     },
     {
       id: 'smart-journal',
@@ -120,10 +142,10 @@ const PatientDashboard: React.FC = () => {
       value: 'Transform thoughts into actionable insights',
       href: '/client/journal',
       color: 'from-emerald-500 to-teal-600',
-      stats: { entries: 47, insights: 12, streak: '5 days' },
+        stats: { entries: todayStats.journalEntries, insights: 0, streak: `${todayStats.streakDays} days` },
       cta: 'Write Entry',
       features: ['AI analysis', 'Pattern detection', 'Mood correlation'],
-      badge: 'Daily streak!'
+        badge: todayStats.streakDays ? 'Daily streak!' : undefined
     },
     {
       id: 'progress',
@@ -132,10 +154,9 @@ const PatientDashboard: React.FC = () => {
       value: 'Visualize your mental health improvements',
       href: '/client',
       color: 'from-orange-500 to-red-500',
-      stats: { score: '7.2/10', improvement: '+15%', goals: '3/4' },
+        stats: { score: `${todayStats.moodScore || 0}/10`, improvement: '+0%', goals: '0/0' },
       cta: 'View Progress',
-      features: ['Mood trends', 'Goal tracking', 'Milestone rewards'],
-      badge: 'New milestone!'
+        features: ['Mood trends', 'Goal tracking', 'Milestone rewards']
     },
     {
       id: 'insights',
@@ -144,12 +165,12 @@ const PatientDashboard: React.FC = () => {
       value: 'Discover patterns and get recommendations',
       href: '/client/insights',
       color: 'from-purple-500 to-pink-500',
-      stats: { insights: 8, accuracy: '92%', recommendations: 5 },
+        stats: { insights: 0, accuracy: '—', recommendations: 0 },
       cta: 'Explore',
-      features: ['Pattern analysis', 'Personalized tips', 'Progress predictions'],
-      badge: 'Updated'
+        features: ['Pattern analysis', 'Personalized tips', 'Progress predictions']
     }
   ];
+  }, [todayStats]);
 
   const quickStats = [
     { label: 'Days Active', value: todayStats.streakDays, icon: Calendar, color: 'text-blue-600' },

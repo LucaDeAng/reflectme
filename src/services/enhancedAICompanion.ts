@@ -1,7 +1,8 @@
 import { GeminiAIService } from './geminiAIService';
 import * as Sentry from "@sentry/react";
-import { getFullUserContext } from './userContextAggregator';
+import { getFullUserContext, ComprehensiveUserContext, getMoodTrend, getRecentTriggers, getTherapyProgress, getCrisisRiskLevel, getPreferredName, getAIInteractionLevel, shouldNotifyTherapist } from './userContextAggregator';
 import { logMoodEntryMCP as logMoodEntryToSupabase, convertToUUID } from './mcpService';
+import AIPersistenceService, { AIConversationEntry, AIInsightEntry, CrisisInterventionEntry } from './aiPersistenceService';
 
 // Enhanced AI Companion Types
 export interface EnhancedChatMessage {
@@ -329,7 +330,7 @@ export class EnhancedAICompanion {
   }
 
   /**
-   * Generate a context-aware AI response using chat history (for both client and therapist)
+   * Provides context-aware responses to user messages
    */
   static async generateContextAwareResponse(
     userMessage: string,
@@ -337,78 +338,76 @@ export class EnhancedAICompanion {
     userId?: string
   ): Promise<{ message: EnhancedChatMessage; suggestions?: CopingSuggestion[] }> {
     const { logger } = Sentry;
+
     return Sentry.startSpan(
       {
-        op: "ai.chat_context",
-        name: "Generate Context-Aware AI Response",
+        op: "ai.chat_response",
+        name: "Generate Context Aware Response",
       },
       async (span) => {
         span.setAttribute("has_user_id", !!userId);
+        span.setAttribute("message_length", userMessage.length);
         span.setAttribute("history_length", chatHistory.length);
-        logger.info("Generating AI response with chat history", {
-          userId: userId ? '[REDACTED]' : undefined,
-          historyLength: chatHistory.length,
-        });
+
         try {
-          // Fetch full user context
-          let userContext = null;
+          console.log('💬 Generating context-aware response for user:', userId);
+
+          let userContext: ComprehensiveUserContext | null = null;
           if (userId) {
+            span.setAttribute("context_fetching", true);
             userContext = await getFullUserContext(userId);
+            span.setAttribute("context_fetching", false);
+            span.setAttribute("context_fetched", !!userContext);
           }
 
-          // Build context string for the AI
-          let context = '';
-          if (userContext) {
-            context += `User Profile: ${JSON.stringify(userContext.profile)}\n`;
-            if (userContext.chat) {
-              context += `Recent Chat: ${userContext.chat?.map((msg: any) => `${msg.sender}: ${msg.content}`).join('\n')}\n`;
-            }
-            context += `Journal: ${userContext.journals?.map((j: any) => j.content).join(' | ')}\n`;
-            context += `Mood: ${userContext.moods?.map((m: any) => `${m.mood} (${m.trigger})`).join(', ')}\n`;
-            context += `Tasks: ${userContext.tasks?.map((t: any) => t.title).join(', ')}\n`;
-            context += `Assessments: ${userContext.assessments?.map((a: any) => `${a.instrument}: ${a.score}`).join(', ')}\n`;
-            context += `Notes: ${userContext.notes?.map((n: any) => n.content).join(' | ')}\n`;
-            context += `Homework: ${userContext.homework?.map((h: any) => h.status).join(', ')}\n`;
-          } else {
-            // Fallback to chat history only
-            const recentHistory = chatHistory.slice(-20);
-            context = recentHistory.map(msg => `${msg.sender}: ${msg.content}`).join('\n');
+          if (this.detectCrisisKeywords(userMessage)) {
+            await this.handleCrisisIntervention(userId, userMessage, userContext);
           }
 
-          // Detect if the user is asking for their last thought/message
-          let systemPrompt = '';
-          if (userContext && userContext.chat && /last\s*(thought|message|thing|said|entry)/i.test(userMessage)) {
-            const lastUserMsg = userContext.chat.slice().reverse().find((msg: any) => msg.sender === 'user');
-            systemPrompt = `The user asked to recall their last thought. Their last message was: "${lastUserMsg ? lastUserMsg.content : 'No previous message found.'}". Reference this in your response.`;
-          } else if (!userContext) {
-            systemPrompt = `You are Zentia, a supportive therapeutic AI assistant. This is the start of a new conversation. Greet the user warmly and ask how you can help today.`;
-          } else {
-            systemPrompt = `You are Zentia, a supportive therapeutic AI assistant. You have access to the user's previous messages and data. Reference them to provide helpful, continuous support. If the user asks about their last thought, share the last user message.`;
-          }
+          // Call Gemini AI service
+          const aiResponseText = await GeminiAIService.generateContextAwareResponse(
+            userMessage,
+            chatHistory,
+            userId
+          );
 
-          // Compose the full prompt/context for the AI model
-          const fullPrompt = `${systemPrompt}\n\nUser Data Context:\n${context}\n\nUser: ${userMessage}`;
-
-          // Call GeminiAIService or your LLM with context + userMessage
-          const aiRawResponse = await GeminiAIService.generateResponseWithContext(userMessage, fullPrompt, userId);
-          // Optionally extract suggestions from the response
-          const suggestions = await this.extractSuggestionsFromAI(aiRawResponse);
           const message: EnhancedChatMessage = {
             id: this.generateId(),
             sender: 'assistant',
-            content: aiRawResponse,
+            content: aiResponseText,
             timestamp: new Date().toISOString(),
             metadata: {
               responseType: 'context-aware',
-              confidence: 0.9,
-              suggestions,
+              confidence: 0.8,
               contextUsed: !!userContext
             }
           };
-          return { message, suggestions };
-        } catch (err) {
-          logger.error('AI context-aware response error', { err });
-          throw err;
+
+          if (userId && userContext && this.shouldGenerateInsight(userContext, userMessage, aiResponseText)) {
+            await this.generateAndLogInsight(userId, userContext, userMessage, aiResponseText);
+          }
+
+          if (userId && userContext && shouldNotifyTherapist(userContext)) {
+             await this.notifyTherapist(userId, userContext, userMessage, aiResponseText);
+          }
+
+          span.setAttribute("response_length", aiResponseText.length);
+          span.setAttribute("success", true);
+          logger.info("Successfully generated context-aware response", {
+             responseLength: aiResponseText.length
+          });
+
+          return { message };
+        } catch (error) {
+           span.setAttribute("success", false);
+           span.setAttribute("error", error instanceof Error ? error.message : 'Unknown error');
+           
+           logger.error('Error generating context aware response', {
+             error: error instanceof Error ? error.message : 'Unknown error'
+           });
+
+           Sentry.captureException(error);
+           throw new Error('Failed to generate context-aware response');
         }
       }
     );
@@ -847,4 +846,230 @@ export class EnhancedAICompanion {
       assignedHomework: []
     };
   }
-}
+
+  // ===== COMPREHENSIVE AI HELPER METHODS =====
+
+  /**
+   * Detect crisis keywords in user messages
+   */
+  private static detectCrisisKeywords(text: string): boolean {
+    const crisisKeywords = [
+      'suicide', 'suicidal', 'kill myself', 'end my life', 'want to die',
+      'self harm', 'hurt myself', 'cut myself', 'overdose',
+      'hopeless', 'worthless', 'better off dead', 'no point',
+      'can\'t go on', 'give up', 'end it all'
+    ];
+    
+    const lowerText = text.toLowerCase();
+    return crisisKeywords.some(keyword => lowerText.includes(keyword));
+  }
+
+  /**
+   * Determine if an insight should be generated based on user context and conversation
+   */
+  private static shouldGenerateInsight(
+    userContext: ComprehensiveUserContext,
+    userMessage: string,
+    aiResponse: string
+  ): boolean {
+    // Generate insights for:
+    // 1. Mood pattern changes
+    if (userContext.mood_entries && userContext.mood_entries.length >= 5) {
+      const recentMoods = userContext.mood_entries.slice(0, 5).map(m => m.mood_score);
+      const avgRecent = recentMoods.reduce((a, b) => a + b, 0) / recentMoods.length;
+      const olderMoods = userContext.mood_entries.slice(5, 10).map(m => m.mood_score);
+      if (olderMoods.length > 0) {
+        const avgOlder = olderMoods.reduce((a, b) => a + b, 0) / olderMoods.length;
+        if (Math.abs(avgRecent - avgOlder) > 2) return true; // Significant mood change
+      }
+    }
+
+    // 2. Trigger pattern recognition
+    const triggerWords = ['stress', 'anxiety', 'work', 'family', 'relationship'];
+    const messageLower = userMessage.toLowerCase();
+    if (triggerWords.some(trigger => messageLower.includes(trigger))) {
+      return true;
+    }
+
+    // 3. Progress milestones
+    if (userContext.therapy_sessions && userContext.therapy_sessions.length > 0) {
+      const lastSession = userContext.therapy_sessions[0];
+      const daysSinceSession = (Date.now() - new Date(lastSession.session_date).getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSinceSession > 7) return true; // Been a week since last session
+    }
+
+    return false;
+  }
+
+  /**
+   * Generate and log AI insight based on user patterns
+   */
+  private static async generateAndLogInsight(
+    userId: string,
+    userContext: ComprehensiveUserContext,
+    userMessage: string,
+    aiResponse: string
+  ): Promise<void> {
+    try {
+      const moodTrend = getMoodTrend(userContext);
+      const recentTriggers = getRecentTriggers(userContext);
+      const riskLevel = getCrisisRiskLevel(userContext);
+
+      let insightType: 'mood_pattern' | 'trigger_pattern' | 'progress_trend' | 'risk_assessment' | 'recommendation' = 'recommendation';
+      let title = '';
+      let description = '';
+      let severityLevel: 'low' | 'medium' | 'high' | 'critical' = 'low';
+      let recommendations: string[] = [];
+
+      // Mood pattern insights
+      if (userContext.mood_entries && userContext.mood_entries.length >= 5) {
+        insightType = 'mood_pattern';
+        title = `Mood Trend Analysis: ${moodTrend}`;
+        description = `Based on your recent mood entries, I've noticed your mood has been ${moodTrend}. `;
+        
+        if (moodTrend === 'declining') {
+          severityLevel = riskLevel === 'high' ? 'high' : 'medium';
+          description += 'This suggests you might benefit from additional support or coping strategies.';
+          recommendations = [
+            'Consider scheduling a check-in with your therapist',
+            'Practice daily mindfulness exercises',
+            'Maintain regular sleep schedule',
+            'Engage in physical activity'
+          ];
+        } else if (moodTrend === 'improving') {
+          severityLevel = 'low';
+          description += 'This is a positive sign that your coping strategies are working well.';
+          recommendations = [
+            'Continue with current coping strategies',
+            'Reflect on what has been helping',
+            'Consider sharing this progress with your therapist'
+          ];
+        }
+      }
+
+      // Trigger pattern insights
+      if (recentTriggers.length > 0) {
+        insightType = 'trigger_pattern';
+        title = `Trigger Pattern Identified: ${recentTriggers[0]}`;
+        description = `I've noticed that "${recentTriggers[0]}" appears frequently in your recent entries. Understanding this pattern can help you prepare better coping strategies.`;
+        severityLevel = 'medium';
+        recommendations = [
+          `Develop specific coping strategies for ${recentTriggers[0]}`,
+          'Practice grounding techniques when triggered',
+          'Discuss this pattern with your therapist',
+          'Consider trigger avoidance strategies when possible'
+        ];
+      }
+
+      // Risk assessment insights
+      if (riskLevel === 'high' || riskLevel === 'medium') {
+        insightType = 'risk_assessment';
+        title = `Wellness Check: ${riskLevel} Support Needed`;
+        description = `Based on your recent activity and mood patterns, it appears you might benefit from additional support. Your wellbeing is important.`;
+        severityLevel = riskLevel === 'high' ? 'critical' : 'high';
+        recommendations = [
+          'Reach out to your support network',
+          'Consider contacting your therapist',
+          'Use crisis resources if needed',
+          'Practice immediate self-care activities'
+        ];
+      }
+
+      // Log the insight
+      await AIPersistenceService.logInsight({
+        user_id: userId,
+        insight_type: insightType,
+        title,
+        description,
+        confidence_score: 0.8,
+        severity_level: severityLevel,
+        data_sources: ['mood_entries', 'journal_entries', 'chat_messages'],
+        actionable_recommendations: recommendations,
+        therapist_notified: severityLevel === 'critical',
+        metadata: {
+          generated_from_conversation: true,
+          user_message_trigger: userMessage.substring(0, 100),
+          mood_trend: moodTrend,
+          recent_triggers: recentTriggers
+        }
+      });
+
+      console.log('✅ AI insight generated and logged:', { insightType, title, severityLevel });
+    } catch (error) {
+      console.error('❌ Error generating AI insight:', error);
+    }
+  }
+
+  /**
+   * Handle crisis intervention when triggered
+   */
+  private static async handleCrisisIntervention(
+    userId: string,
+    userMessage: string,
+    userContext: ComprehensiveUserContext | null
+  ): Promise<void> {
+    try {
+      const riskLevel = userContext ? getCrisisRiskLevel(userContext) : 'medium';
+      
+      // Determine intervention type based on risk level
+      let interventionType: 'automated_response' | 'therapist_notification' | 'emergency_contact' | 'crisis_hotline' = 'automated_response';
+      
+      if (riskLevel === 'high' || this.detectCrisisKeywords(userMessage)) {
+        interventionType = 'therapist_notification';
+      }
+
+      // Log crisis intervention
+      await AIPersistenceService.logCrisisIntervention({
+        user_id: userId,
+        trigger_source: 'chat_message',
+        risk_level: riskLevel as 'low' | 'medium' | 'high' | 'imminent',
+        intervention_type: interventionType,
+        ai_assessment: `Crisis keywords detected in user message. Risk level assessed as ${riskLevel}. Immediate support recommended.`,
+        follow_up_required: true,
+        metadata: {
+          triggering_message: userMessage.substring(0, 200),
+          detection_method: 'keyword_analysis',
+          user_context_available: !!userContext
+        }
+      });
+
+      // Notify therapist if high risk
+      if (interventionType === 'therapist_notification' && userContext?.therapy_sessions?.[0]) {
+        await this.notifyTherapist(userId, userContext, userMessage, 'Crisis intervention triggered');
+      }
+
+      console.log('🚨 Crisis intervention logged:', { userId, riskLevel, interventionType });
+    } catch (error) {
+      console.error('❌ Error handling crisis intervention:', error);
+    }
+  }
+
+  /**
+   * Notify therapist when significant events occur
+   */
+  private static async notifyTherapist(
+    userId: string,
+    userContext: ComprehensiveUserContext | null,
+    userMessage: string,
+    aiResponse: string
+  ): Promise<void> {
+    try {
+      // This would integrate with your notification system
+      // For now, we'll log the notification intent
+      console.log('📧 Therapist notification triggered:', {
+        userId,
+        reason: 'Significant user activity detected',
+        userMessage: userMessage.substring(0, 100),
+        timestamp: new Date().toISOString()
+      });
+
+      // In a real implementation, this would:
+      // 1. Send email/SMS to therapist
+      // 2. Create a task in therapist dashboard
+      // 3. Log the notification in the system
+      
+    } catch (error) {
+      console.error('❌ Error notifying therapist:', error);
+    }
+  }
+} 

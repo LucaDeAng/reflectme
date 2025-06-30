@@ -320,7 +320,12 @@ export const validateMagicLink = (token: string, assessmentId: string): boolean 
 import { Resend } from 'resend';
 
 // Resend configuration
-const resend = new Resend(import.meta.env.VITE_RESEND_API_KEY || 'your_resend_api_key_here');
+const resendApiKey = import.meta.env.VITE_RESEND_API_KEY;
+if (!resendApiKey) {
+  throw new Error("VITE_RESEND_API_KEY is not set. Email functionality cannot be initialized.");
+}
+
+const resend = new Resend(resendApiKey);
 
 export interface EmailTemplate {
   type: 'welcome' | 'update' | 'launch' | 'reminder';

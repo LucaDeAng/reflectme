@@ -1,7 +1,11 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+// @refresh skip
+// Disable Fast Refresh for this context because its exported hooks/providers are not compatible with React Fast Refresh and caused infinite HMR invalidations.
+
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { GeminiAIService } from '../services/geminiAIService';
 import { fetchClientChatHistory, fetchTherapistChatHistory } from '../services/chatHistoryService';
+import { supabase } from '../lib/supabase';
 
 // Types
 export interface ChatMessage {
@@ -78,6 +82,7 @@ interface ZentiaContextType {
   
   // Progress
   getProgressData: () => { date: string; mood: number }[];
+  fetchInsightsData: () => Promise<void>;
   
   // Chat storica separata
   clientChatHistory: ChatMessage[];
@@ -96,230 +101,205 @@ export const useZentia = () => {
   return context;
 };
 
-// Removed unused initializeGemini function - now handled in GeminiAIService
-
-// Simplified mock data for demo purposes only
-const mockCopingTools: CopingTool[] = [
-  {
-    id: '1',
-    title: '4-7-8 Breathing',
-    description: 'A calming breathing technique to reduce anxiety and promote relaxation',
-    category: 'breathing',
-    duration: '2-3 minutes',
-    steps: [
-      'Sit comfortably with your back straight',
-      'Inhale through your nose for 4 counts',
-      'Hold your breath for 7 counts',
-      'Exhale through your mouth for 8 counts'
-    ],
-    isRecommended: true,
-    therapistApproved: true,
-  },
-  {
-    id: '2',
-    title: '5-4-3-2-1 Grounding',
-    description: 'Use your senses to ground yourself in the present moment',
-    category: 'grounding',
-    duration: '3-5 minutes',
-    steps: [
-      'Notice 5 things you can see',
-      'Notice 4 things you can touch',
-      'Notice 3 things you can hear',
-      'Notice 2 things you can smell',
-      'Notice 1 thing you can taste'
-    ],
-    isRecommended: true,
-    therapistApproved: true,
-  }
-];
-
-const mockSessionRecaps: SessionRecap[] = [
-  {
-    id: '1',
-    date: new Date().toISOString().split('T')[0],
-    title: 'Demo Session',
-    keyTakeaways: [
-      'Explored coping strategies for daily challenges',
-      'Practiced mindfulness techniques'
-    ],
-    therapistSuggestions: [
-      'Continue daily breathing exercises',
-      'Practice grounding when feeling overwhelmed'
-    ],
-    actionItems: [
-      'Practice breathing exercises',
-      'Use grounding techniques'
-    ],
-    moodBefore: 4,
-    moodAfter: 6
-  }
-];
-
-// Generate more realistic mock mood data for better insights
-const generateMockMoodEntries = (): MoodEntry[] => {
-  const entries: MoodEntry[] = [];
-  const today = new Date();
-  
-  // Generate 14 days of mock data for better trend analysis
-  for (let i = 13; i >= 0; i--) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
-    
-    // Create realistic mood patterns (slight variations)
-    const baseMood = 6; // Average mood
-    const variation = Math.random() * 3 - 1.5; // -1.5 to +1.5 variation
-    const mood = Math.max(1, Math.min(10, Math.round(baseMood + variation)));
-    
-    entries.push({
-      id: `mock_${i}`,
-      date: date.toISOString().split('T')[0],
-      mood: mood,
-      context: 'demo',
-      trigger: i % 3 === 0 ? ['work stress', 'good sleep', 'exercise', 'social time'][Math.floor(Math.random() * 4)] : undefined
-    });
-  }
-  
-  return entries;
-};
-
-const mockMoodEntries: MoodEntry[] = generateMockMoodEntries();
-
 export const ZentiaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([
     {
       id: '1',
       sender: 'assistant',
-      content: "Hello! I'm your Zentia companion. I'm here to support you between therapy sessions. How are you feeling today?",
+      content: `Hello! I'm your Zentia AI companion. I'm here to support you on your mental health journey between therapy sessions.
+
+Here's how I can help you:
+• **Chat & Support**: Share how you're feeling, and I'll provide personalized guidance
+• **Mood Tracking**: I can help you track your daily mood and identify patterns
+• **Coping Strategies**: Get personalized coping techniques based on your needs
+• **Progress Insights**: Review your mental health journey with AI-powered analytics
+
+To get started, try telling me:
+- How you're feeling today
+- What brought you to Zentia
+- Any specific challenges you're facing
+
+I remember our conversations and learn about your preferences over time. What would you like to talk about?`,
       timestamp: new Date().toISOString(),
     }
   ]);
   const [isGeneratingResponse, setIsGeneratingResponse] = useState(false);
-  const [moodEntries, setMoodEntries] = useState<MoodEntry[]>(mockMoodEntries);
-  // Stato per chat storica separata
+  const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
+
+  // Initialize with empty arrays for new users - no mock data
+  const [copingTools, setCopingTools] = useState<CopingTool[]>([]);
+  const [sessionRecaps, setSessionRecaps] = useState<SessionRecap[]>([]);
+  
+  // Chat histories
   const [clientChatHistory, setClientChatHistory] = useState<ChatMessage[]>([]);
   const [therapistChatHistory, setTherapistChatHistory] = useState<ChatMessage[]>([]);
+
+  const fetchInsightsData = useCallback(async () => {
+    if (!user) return;
+
+    console.log('Fetching insights data for user:', user.id);
+    
+    // Fetch mood entries
+    const { data: moodData, error: moodError } = await supabase
+      .from('mood_entries')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true });
+
+    if (moodError) {
+      console.error('Error fetching mood entries:', moodError);
+    } else if (moodData) {
+      const formattedMoodData = moodData.map(entry => ({
+        id: entry.id,
+        date: entry.created_at,
+        mood: entry.mood_score,
+        trigger: entry.trigger,
+        notes: entry.notes,
+        context: 'manual' as const,
+      }));
+      setMoodEntries(formattedMoodData);
+    }
+
+    // Fetch therapy sessions
+    const { data: sessionData, error: sessionError } = await supabase
+      .from('therapy_sessions')
+      .select('*')
+      .eq('client_id', user.id)
+      .order('session_date', { ascending: false });
+
+    if (sessionError) {
+      console.error('Error fetching therapy sessions:', sessionError);
+    } else if (sessionData) {
+      const formattedSessionData = sessionData.map(session => ({
+        id: session.id,
+        date: session.session_date,
+        title: `Session on ${new Date(session.session_date).toLocaleDateString()}`,
+        keyTakeaways: session.goals || [],
+        therapistSuggestions: session.techniques_used || [],
+        actionItems: session.homework_assigned || [],
+        moodBefore: session.mood_before,
+        moodAfter: session.mood_after
+      }));
+      setSessionRecaps(formattedSessionData);
+    }
+
+    // Fetch coping tools (if any are stored in database)
+    const { data: toolsData, error: toolsError } = await supabase
+      .from('coping_tools')
+      .select('*')
+      .eq('user_id', user.id);
+
+    if (toolsError) {
+      console.error('Error fetching coping tools:', toolsError);
+    } else if (toolsData) {
+      setCopingTools(toolsData);
+    }
+  }, [user]);
+
 
   // Funzioni per fetch separato
   const fetchAndSetClientChatHistory = useCallback(async (clientId: string) => {
     const history = await fetchClientChatHistory(clientId);
     setClientChatHistory(history);
+    setTherapistChatHistory(history);
     return history;
   }, []);
+  
   const fetchAndSetTherapistChatHistory = useCallback(async (clientId: string) => {
     const history = await fetchTherapistChatHistory(clientId);
     setTherapistChatHistory(history);
     return history;
   }, []);
+ // Automatically fetch data when user is authenticated
+ useEffect(() => {
+  if (user) {
+    console.log('👤 User authenticated, fetching initial data...');
+    fetchInsightsData();
+  }
+}, [user, fetchInsightsData]);
 
   const generateAIResponse = useCallback(async (userMessage: string) => {
     setIsGeneratingResponse(true);
     
     try {
-      // Create therapy context from session recaps and mood entries
-      const therapyContext = {
-        recentSessions: mockSessionRecaps.slice(0, 2),
-        recentMoods: moodEntries.slice(-7),
-        copingTools: mockCopingTools.filter(tool => tool.therapistApproved)
-      };
+      // Use the new context-aware response method
+      const chatHistoryFormatted = chatHistory.map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'model' as const,
+        parts: [{ text: msg.content }]
+      }));
 
-      const response = await GeminiAIService.generaRispostaChat(
+      const response = await GeminiAIService.generateContextAwareResponse(
         userMessage,
+        chatHistoryFormatted,
         user?.id
       );
-      console.log('Gemini response:', response);
 
       const aiMessage: ChatMessage = {
         id: Date.now().toString(),
         sender: 'assistant',
-        content: response.contenuto,
+        content: response,
         timestamp: new Date().toISOString(),
-        metadata: response.metadata
       };
 
       setChatHistory(prev => [...prev, aiMessage]);
-
-      // If mood was detected, add it to mood entries
-      if (response.metadata?.moodDetected) {
-        const moodEntry: MoodEntry = {
-          id: Date.now().toString(),
-          date: new Date().toISOString().split('T')[0],
-          mood: response.metadata.moodDetected,
-          context: 'chat',
-          notes: `Detected during conversation: "${userMessage.substring(0, 50)}..."`
-        };
-        setMoodEntries(prev => [...prev, moodEntry]);
-      }
-
+      return aiMessage;
     } catch (error) {
       console.error('Error generating AI response:', error);
       const errorMessage: ChatMessage = {
         id: Date.now().toString(),
-        sender: 'system',
-        content: "I'm sorry, I'm having trouble responding right now. Please try again in a moment, or if this persists, you can always reach out to your therapist directly.",
+        sender: 'assistant',
+        content: "I'm sorry, I'm having trouble responding right now. Please try again.",
         timestamp: new Date().toISOString(),
       };
       setChatHistory(prev => [...prev, errorMessage]);
+      return errorMessage;
     } finally {
       setIsGeneratingResponse(false);
     }
-  }, [moodEntries, user?.id]);
+  }, [chatHistory, user?.id]);
 
-  const addMessage = useCallback((message: Omit<ChatMessage, 'id'>): ChatMessage => {
-    const newMessage: ChatMessage = {
-      ...message,
-      id: Date.now().toString(),
-    };
-    
+  const addMessage = (message: Omit<ChatMessage, 'id'>): ChatMessage => {
+    const newMessage = { ...message, id: Date.now().toString() };
     setChatHistory(prev => [...prev, newMessage]);
-
-    // If it's a user message, generate AI response
-    if (message.sender === 'user') {
-      generateAIResponse(message.content);
+    if (newMessage.sender === 'user') {
+      generateAIResponse(newMessage.content);
     }
-
     return newMessage;
-  }, [generateAIResponse]);
+  };
 
-  const getRecommendedTools = useCallback((): CopingTool[] => {
-    return mockCopingTools.filter(tool => tool.isRecommended);
-  }, []);
-
-  const addMoodEntry = useCallback((entry: Omit<MoodEntry, 'id'>): void => {
-    const newEntry: MoodEntry = {
-      ...entry,
-      id: Date.now().toString(),
-    };
+  const addMoodEntry = (entry: Omit<MoodEntry, 'id'>) => {
+    const newEntry = { ...entry, id: Date.now().toString() };
     setMoodEntries(prev => [...prev, newEntry]);
-  }, []);
+  };
 
+  const getRecommendedTools = useCallback(() => {
+    return copingTools.filter(tool => tool.isRecommended);
+  }, [copingTools]);
+  
   const getProgressData = useCallback(() => {
-    return moodEntries
-      .slice(-30) // Last 30 entries
-      .map(entry => ({
-        date: entry.date,
-        mood: entry.mood
-      }))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return moodEntries.map(entry => ({
+      date: entry.date,
+      mood: entry.mood
+    }));
   }, [moodEntries]);
 
   const value: ZentiaContextType = React.useMemo(() => ({
     chatHistory,
     addMessage,
     isGeneratingResponse,
-    copingTools: mockCopingTools,
+    copingTools,
     getRecommendedTools,
-    sessionRecaps: mockSessionRecaps,
+    sessionRecaps,
     moodEntries,
     addMoodEntry,
     getProgressData,
+    fetchInsightsData,
     clientChatHistory,
     therapistChatHistory,
     fetchAndSetClientChatHistory,
     fetchAndSetTherapistChatHistory,
-  }), [chatHistory, addMessage, isGeneratingResponse, moodEntries, getRecommendedTools, addMoodEntry, getProgressData, clientChatHistory, therapistChatHistory, fetchAndSetClientChatHistory, fetchAndSetTherapistChatHistory]);
-
-
+  }), [chatHistory, addMessage, isGeneratingResponse, moodEntries, getRecommendedTools, addMoodEntry, getProgressData, clientChatHistory, therapistChatHistory, fetchAndSetClientChatHistory, fetchAndSetTherapistChatHistory, fetchInsightsData]);
 
   return (
     <ZentiaContext.Provider value={value}>

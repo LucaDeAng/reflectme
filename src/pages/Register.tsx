@@ -178,14 +178,12 @@ const Register: React.FC = () => {
       
       await register(formData.name, formData.email, formData.password, formData.role);
       
-      // Removed automatic login - let user sign in manually
-      // await login(formData.email, formData.password);
-      
-      // Navigate to login page with success message
+      // Registration successful - navigate to login with confirmation message
       navigate('/login', { 
         state: { 
-          message: 'Account created successfully! Please sign in with your credentials.',
-          email: formData.email 
+          message: 'Account created successfully! Please check your email for a confirmation link before signing in.',
+          email: formData.email,
+          type: 'success'
         } 
       });
       

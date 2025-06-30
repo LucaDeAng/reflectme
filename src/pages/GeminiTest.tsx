@@ -1,274 +1,181 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { motion } from 'framer-motion';
-import { Send, CheckCircle, XCircle, Loader2, Bot } from 'lucide-react';
-import { GeminiAIService } from '../services/geminiAIService';
+import { Bot, Send, Loader2, User, Key, Server, AlertTriangle } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { EnhancedAICompanion, EnhancedChatMessage } from '../services/enhancedAICompanion';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 const GeminiTest: React.FC = () => {
-  const [isTestingAPI, setIsTestingAPI] = useState(false);
-  const [isTestingChat, setIsTestingChat] = useState(false);
-  const [apiStatus, setApiStatus] = useState<'pending' | 'success' | 'error'>('pending');
-  const [chatResponse, setChatResponse] = useState<string>('');
-  const [testMessage, setTestMessage] = useState("Mi sento molto ansioso oggi");
-  const [chatError, setChatError] = useState<string>('');
+  const { user, loading: authLoading } = useAuth();
+  const [chatHistory, setChatHistory] = useState<EnhancedChatMessage[]>([]);
+  const [userInput, setUserInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const testAPIConnection = async () => {
-    setIsTestingAPI(true);
-    setApiStatus('pending');
-    
-    try {
-      // Test basic API connection
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: "Test di connessione: rispondi solo 'Connessione riuscita'" }]
-          }]
-        })
-      });
-      
-      if (response.ok) {
-        setApiStatus('success');
-      } else {
-        setApiStatus('error');
+  const startWelcomeChat = () => {
+    setChatHistory([
+      {
+        id: 'init',
+        sender: 'assistant',
+        content: `Hello ${user?.user_metadata.first_name || 'there'}! I'm your Zentia AI companion, now running with full context awareness. How can I help you today?`,
+        timestamp: new Date().toISOString(),
+        metadata: { responseType: 'general', confidence: 1 }
       }
-    } catch (error) {
-      console.error('Errore test API:', error);
-      setApiStatus('error');
-    } finally {
-      setIsTestingAPI(false);
-    }
+    ]);
   };
 
-  const testChatResponse = async () => {
-    setIsTestingChat(true);
-    setChatResponse('');
-    setChatError('');
-    
+  React.useEffect(() => {
+    if (user) {
+      startWelcomeChat();
+    }
+  }, [user]);
+
+  const handleSendMessage = async () => {
+    if (!userInput.trim() || isLoading) return;
+
+    const userMessage: EnhancedChatMessage = {
+      id: `user-${Date.now()}`,
+      sender: 'user',
+      content: userInput,
+      timestamp: new Date().toISOString(),
+      metadata: { responseType: 'general', confidence: 1 }
+    };
+
+    setChatHistory(prev => [...prev, userMessage]);
+    const currentInput = userInput;
+    setUserInput('');
+    setIsLoading(true);
+    setError(null);
+
     try {
-      const response = await GeminiAIService.generaRispostaChat(testMessage);
-      setChatResponse(response.contenuto);
-    } catch (error) {
-      console.error('Errore test chat:', error);
-      setChatError(error instanceof Error ? error.message : 'Errore sconosciuto');
+      if (!user) throw new Error('User is not authenticated.');
+
+      const { message: aiResponseMessage } = await EnhancedAICompanion.generateContextAwareResponse(
+        currentInput,
+        chatHistory.filter(m => m.sender !== 'system').map(m => ({
+            role: m.sender === 'user' ? 'user' : 'model', 
+            parts: [{ text: m.content }]
+        })),
+        user.id
+      );
+      
+      setChatHistory(prev => [...prev, aiResponseMessage]);
+
+    } catch (err: any) {
+      const errorMessage = `Error: ${err.message || 'An unknown error occurred.'}`;
+      setError(errorMessage);
+      setChatHistory(prev => [...prev, {
+        id: `error-${Date.now()}`,
+        sender: 'system',
+        content: errorMessage,
+        timestamp: new Date().toISOString(),
+        metadata: { responseType: 'general', confidence: 1 }
+      }]);
     } finally {
-      setIsTestingChat(false);
+      setIsLoading(false);
     }
   };
+  
+  const apiKeyStatus = import.meta.env.VITE_GEMINI_API_KEY && import.meta.env.VITE_GEMINI_API_KEY.startsWith('AIza');
 
-  const getAPIKeyStatus = () => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    
-    if (!apiKey) {
-      return { status: 'error', message: 'API Key non configurata' };
-    }
-    
-    if (apiKey === 'AIzaSyYourGeminiApiKeyHere') {
-      return { status: 'error', message: 'API Key è ancora il placeholder' };
-    }
-    
-    if (!apiKey.startsWith('AIza')) {
-      return { status: 'error', message: 'API Key non valida (deve iniziare con AIza)' };
-    }
-    
-    return { status: 'success', message: `API Key configurata (${apiKey.length} caratteri)` };
-  };
-
-  const apiKeyStatus = getAPIKeyStatus();
+  if (authLoading) {
+    return <div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin" /></div>;
+  }
 
   return (
-    <div className="min-h-screen bg-neutral-50 py-12">
-      <div className="max-w-4xl mx-auto px-6">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-12"
-        >
-          <div className="w-16 h-16 gradient-primary rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <Bot className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-4xl font-bold text-neutral-800 mb-4">
-            Test Integrazione Gemini AI
-          </h1>
-          <p className="text-xl text-neutral-600">
-            Verifica che l'integrazione con Google Gemini funzioni correttamente
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 md:p-8">
+      <div className="max-w-4xl mx-auto">
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-8">
+          <Bot className="w-16 h-16 mx-auto text-primary mb-4" />
+          <h1 className="text-4xl font-bold text-gray-800">AI Companion Context Test</h1>
+          <p className="text-lg text-gray-600 mt-2">
+            A "certosino" panel to test the AI's contextual awareness.
           </p>
         </motion.div>
 
-        {/* API Key Status */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl p-8 shadow-soft mb-8"
-        >
-          <h2 className="text-2xl font-semibold text-neutral-800 mb-6 flex items-center">
-            {apiKeyStatus.status === 'success' ? (
-              <CheckCircle className="w-6 h-6 text-green-500 mr-3" />
-            ) : (
-              <XCircle className="w-6 h-6 text-red-500 mr-3" />
-            )}
-            Stato API Key
-          </h2>
-          
-          <div className={`p-4 rounded-xl ${
-            apiKeyStatus.status === 'success' 
-              ? 'bg-green-50 border border-green-200' 
-              : 'bg-red-50 border border-red-200'
-          }`}>
-            <p className={`font-medium ${
-              apiKeyStatus.status === 'success' ? 'text-green-800' : 'text-red-800'
-            }`}>
-              {apiKeyStatus.message}
-            </p>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Authentication</CardTitle>
+              <User className="w-4 h-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              {user ? <Badge variant="success">Authenticated</Badge> : <Badge variant="destructive">Not Authenticated</Badge>}
+              <p className="text-xs text-muted-foreground mt-1">{user?.email}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Gemini API Key</CardTitle>
+              <Key className="w-4 h-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              {apiKeyStatus ? <Badge variant="success">Configured</Badge> : <Badge variant="destructive">Missing or Invalid</Badge>}
+               <p className="text-xs text-muted-foreground mt-1">.env VITE_GEMINI_API_KEY</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Context Function</CardTitle>
+              <Server className="w-4 h-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+               <Badge variant="success">Ready</Badge>
+               <p className="text-xs text-muted-foreground mt-1">fetch-comprehensive-user-context</p>
+            </CardContent>
+          </Card>
+        </div>
 
-          {apiKeyStatus.status === 'error' && (
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-              <h3 className="font-semibold text-blue-800 mb-2">Come configurare l'API Key:</h3>
-              <ol className="text-blue-700 space-y-1 list-decimal list-inside">
-                <li>Vai su <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="underline">Google AI Studio</a></li>
-                <li>Accedi con il tuo account Google</li>
-                <li>Clicca "Create API Key"</li>
-                <li>Copia la chiave generata</li>
-                <li>Crea un file <code className="bg-blue-100 px-1 rounded">.env</code> nella root del progetto</li>
-                <li>Aggiungi: <code className="bg-blue-100 px-1 rounded">VITE_GEMINI_API_KEY=la_tua_chiave_qui</code></li>
-                <li>Riavvia il server di sviluppo</li>
-              </ol>
-            </div>
-          )}
-        </motion.div>
-
-        {/* API Connection Test */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-white rounded-2xl p-8 shadow-soft mb-8"
-        >
-          <h2 className="text-2xl font-semibold text-neutral-800 mb-6">
-            Test Connessione API
-          </h2>
-          
-          <button
-            onClick={testAPIConnection}
-            disabled={isTestingAPI || apiKeyStatus.status === 'error'}
-            className="btn btn-primary mb-6 flex items-center"
-          >
-            {isTestingAPI ? (
-              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-            ) : (
-              <Send className="w-5 h-5 mr-2" />
-            )}
-            {isTestingAPI ? 'Testing...' : 'Testa Connessione'}
-          </button>
-
-          {apiStatus !== 'pending' && (
-            <div className={`p-4 rounded-xl ${
-              apiStatus === 'success' 
-                ? 'bg-green-50 border border-green-200' 
-                : 'bg-red-50 border border-red-200'
-            }`}>
-              <div className="flex items-center">
-                {apiStatus === 'success' ? (
-                  <CheckCircle className="w-5 h-5 text-green-500 mr-2" />
-                ) : (
-                  <XCircle className="w-5 h-5 text-red-500 mr-2" />
-                )}
-                <span className={`font-medium ${
-                  apiStatus === 'success' ? 'text-green-800' : 'text-red-800'
-                }`}>
-                  {apiStatus === 'success' 
-                    ? 'Connessione riuscita! Gemini AI è disponibile.' 
-                    : 'Errore di connessione. Controlla la tua API key.'
-                  }
-                </span>
+        {!user ? (
+          <Card className="text-center p-8">
+            <AlertTriangle className="w-12 h-12 mx-auto text-yellow-500 mb-4" />
+            <CardTitle>Authentication Required</CardTitle>
+            <CardDescription className="mt-2">Please log in to use the AI Companion test panel.</CardDescription>
+            <Button onClick={() => window.location.href = '/login'} className="mt-4">Go to Login</Button>
+          </Card>
+        ) : (
+          <Card>
+            <CardContent className="p-6">
+              <div className="h-[500px] w-full pr-4 mb-4 overflow-y-auto">
+                <div className="flex flex-col space-y-4">
+                  {chatHistory.map((msg) => (
+                    <div key={msg.id} className={`flex items-end gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      {msg.sender === 'assistant' && <Bot className="w-6 h-6 text-primary flex-shrink-0"/>}
+                      <div className={`max-w-xs md:max-w-md lg:max-w-lg p-3 rounded-lg ${
+                        msg.sender === 'user' ? 'bg-primary text-primary-foreground' :
+                        msg.sender === 'assistant' ? 'bg-muted' : 'bg-destructive/20 text-destructive-foreground'
+                      }`}>
+                        <p className="text-sm" style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</p>
+                        {msg.metadata?.contextUsed !== undefined && <p className="text-xs mt-2 opacity-60">Context Used: {String(msg.metadata.contextUsed)}</p>}
+                      </div>
+                       {msg.sender === 'user' && <User className="w-6 h-6 text-muted-foreground flex-shrink-0"/>}
+                    </div>
+                  ))}
+                  {isLoading && <div className="flex justify-start"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground"/></div>}
+                </div>
               </div>
-            </div>
-          )}
-        </motion.div>
-
-        {/* Chat Response Test */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white rounded-2xl p-8 shadow-soft"
-        >
-          <h2 className="text-2xl font-semibold text-neutral-800 mb-6">
-            Test Risposta Chat
-          </h2>
-          
-          <div className="mb-6">
-            <label htmlFor="testMessage" className="block text-sm font-medium text-neutral-700 mb-2">
-              Messaggio di test:
-            </label>
-            <input
-              id="testMessage"
-              type="text"
-              value={testMessage}
-              onChange={(e) => setTestMessage(e.target.value)}
-              className="input input-soft w-full"
-              placeholder="Scrivi un messaggio per testare l'AI..."
-            />
-          </div>
-
-          <button
-            onClick={testChatResponse}
-            disabled={isTestingChat || apiKeyStatus.status === 'error' || !testMessage.trim()}
-            className="btn btn-primary mb-6 flex items-center"
-          >
-            {isTestingChat ? (
-              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-            ) : (
-              <Bot className="w-5 h-5 mr-2" />
-            )}
-            {isTestingChat ? 'Generando risposta...' : 'Testa Risposta AI'}
-          </button>
-
-          {chatResponse && (
-            <div className="p-6 bg-green-50 border border-green-200 rounded-xl mb-4">
-              <h3 className="font-semibold text-green-800 mb-3 flex items-center">
-                <CheckCircle className="w-5 h-5 mr-2" />
-                Risposta AI generata con successo:
-              </h3>
-              <div className="text-green-700 bg-white p-4 rounded-lg border border-green-200">
-                {chatResponse}
+              
+              {error && <p className="text-destructive text-sm my-2">{error}</p>}
+              
+              <div className="flex space-x-2">
+                <Input
+                  value={userInput}
+                  onChange={(e) => setUserInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Ask for your name or last journal entry..."
+                  disabled={isLoading || !user}
+                  className="flex-1"
+                />
+                <Button onClick={handleSendMessage} disabled={isLoading || !user}>
+                  <Send className="w-4 h-4" />
+                </Button>
               </div>
-            </div>
-          )}
-
-          {chatError && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
-              <div className="flex items-center">
-                <XCircle className="w-5 h-5 text-red-500 mr-2" />
-                <span className="font-medium text-red-800">Errore:</span>
-              </div>
-              <p className="text-red-700 mt-2">{chatError}</p>
-            </div>
-          )}
-        </motion.div>
-
-        {/* Navigation */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="text-center mt-12"
-        >
-          <p className="text-neutral-600 mb-4">
-            Una volta che tutti i test passano, puoi provare la chat completa:
-          </p>
-          <a
-            href="/chat"
-            className="btn btn-secondary"
-          >
-            Vai alla Chat →
-          </a>
-        </motion.div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

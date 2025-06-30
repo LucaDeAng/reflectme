@@ -10,6 +10,8 @@ import { Toaster } from 'sonner';
 import { SystemStatusBanner, ProgressIndicators } from './components/ui/FeedbackComponents';
 import { startNetworkMonitoring } from './utils/feedbackUtils';
 
+import ProtectedRoute from './components/ProtectedRoute';
+
 // Public Pages
 import Home from './pages/Home';
 import About from './pages/About';
@@ -73,19 +75,19 @@ import Settings from './pages/settings/Settings';
 // Test Components
 import { PDFTestComponent } from './components/test/PDFTestComponent';
 import Phase4Test from './pages/Phase4Test';
-import DataSeeder from './pages/DataSeeder';
 import PrototypeOverview from './pages/PrototypeOverview';
 import GeminiTest from './pages/GeminiTest';
+import TestPage from './pages/TestPage';
+import AiCompanionDemo from './pages/AiCompanionDemo';
 import WaitlistAdmin from './components/waitlist/WaitlistAdmin';
 import EmailCampaignAdmin from './components/waitlist/EmailCampaignAdmin';
+import NotificationHistory from "./components/waitlist/NotificationHistory";
 
 // Layouts
 import UnifiedLayout from './layouts/UnifiedLayout';
 import TherapistLayout from './layouts/TherapistLayout';
 import PatientLayout from './layouts/PatientLayout';
 import AppLayout from './layouts/AppLayout';
-
-import { AITestPanel } from './components/AITestPanel';
 
 // Enhanced Access Denied Component with error handling
 const AccessDenied: React.FC = () => {
@@ -555,28 +557,28 @@ function App() {
                                   <Phase4Test />
                                 </ErrorBoundary>
                               } />
-                              <Route path="/data-seeder" element={
-                                <ErrorBoundary componentName="DataSeeder">
-                                  <DataSeeder />
-                                </ErrorBoundary>
-                              } />
-
+                
                 {/* Development AI Test Panel - Only for admins */}
                 {import.meta.env.MODE === 'development' && (
                   <>
-                                  <Route path="/ai-test" element={
-                                    <AdminRoute>
-                                      <ErrorBoundary componentName="AITestPanel">
-                                        <AITestPanel />
-                                      </ErrorBoundary>
-                                    </AdminRoute>
-                                  } />
                                   <Route path="/gemini-test" element={
-                                    <AdminRoute>
+                                    <ProtectedRoute roles={['patient', 'therapist', 'admin']}>
                                       <ErrorBoundary componentName="GeminiTest">
                                         <GeminiTest />
                                       </ErrorBoundary>
-                                    </AdminRoute>
+                                    </ProtectedRoute>
+                                  } />
+                                  <Route path="/test" element={
+                                    <ProtectedRoute roles={['patient', 'therapist', 'admin']}>
+                                      <ErrorBoundary componentName="TestPage">
+                                        <TestPage />
+                                      </ErrorBoundary>
+                                    </ProtectedRoute>
+                                  } />
+                                  <Route path="/ai-companion-demo" element={
+                                    <ErrorBoundary componentName="AiCompanionDemo">
+                                      <AiCompanionDemo />
+                                    </ErrorBoundary>
                                   } />
                   </>
                 )}

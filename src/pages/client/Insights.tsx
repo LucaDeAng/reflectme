@@ -14,23 +14,45 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useZentia } from '../../contexts/ZentiaContext';
 import MoodTrendChart from '../../components/charts/MoodTrendChart';
+import EmptyState from '../../components/ui/EmptyState';
 
 const Insights: React.FC = () => {
   const { user } = useAuth();
-  const { getProgressData, sessionRecaps, moodEntries } = useZentia();
+  const { getProgressData, sessionRecaps, moodEntries, fetchInsightsData } = useZentia();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const progressData = getProgressData();
+  
+  // Calculate mood trend (% change) comparing last 7 days vs previous 7 days
+  const moodTrend = useMemo(() => {
+    if (progressData.length < 8) return 0;
+    const recent = progressData.slice(-7);
+    const previous = progressData.slice(-14, -7);
+    const recentAvg = recent.reduce((sum, e) => sum + e.mood, 0) / recent.length;
+    const prevAvg = previous.reduce((sum, e) => sum + e.mood, 0) / previous.length;
+    if (prevAvg === 0) return 0;
+    return ((recentAvg - prevAvg) / prevAvg) * 100;
+  }, [progressData]);
 
   useEffect(() => {
-    console.log('🔄 Insights page mounted');
-    console.log('📊 Mood entries:', moodEntries.length);
-    console.log('📈 Progress data:', getProgressData().length);
-    
-    // Simple timeout to simulate loading
-    setTimeout(() => {
+    const loadData = async () => {
+    setLoading(true);
+      setError(null);
+      try {
+        console.log('🔄 Insights page mounted, fetching data...');
+        await fetchInsightsData();
+        console.log('✅ Insights loaded successfully');
+      } catch (e) {
+        console.error('Failed to fetch insights data', e);
+        setError('Could not load your insights. Please try again later.');
+    } finally {
       setLoading(false);
-      console.log('✅ Insights loaded');
-    }, 1000);
-  }, []);
+    }
+  };
+
+    loadData();
+  }, [fetchInsightsData]);
 
   if (loading) {
     return (
@@ -43,42 +65,54 @@ const Insights: React.FC = () => {
     );
   }
 
-  const progressData = getProgressData();
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center text-red-600">
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (progressData.length === 0) {
+    return (
+      <EmptyState
+        Icon={Brain}
+        title="Your Insights Await"
+        message="Start by tracking your mood or writing in your journal. Once you have some data, we'll generate personalized insights here to help you on your journey."
+        actionText="Track Your Mood"
+        onAction={() => { /* Navigate to mood tracking page */ }}
+      />
+    );
+  }
+
   const recentMood = progressData.length > 0 
     ? progressData.reduce((sum, entry) => sum + entry.mood, 0) / progressData.length 
     : 6;
   const wellnessScore = Math.round((recentMood / 10) * 100);
   const streakDays = Math.max(1, moodEntries.length);
 
-  // Calculate mood trend (% change) comparing last 7 days vs previous 7 days
-  const moodTrend = useMemo(() => {
-    if (progressData.length < 8) return 0;
-    const recent = progressData.slice(-7);
-    const previous = progressData.slice(-14, -7);
-    const recentAvg = recent.reduce((sum, e) => sum + e.mood, 0) / recent.length;
-    const prevAvg = previous.reduce((sum, e) => sum + e.mood, 0) / previous.length;
-    if (prevAvg === 0) return 0;
-    return ((recentAvg - prevAvg) / prevAvg) * 100;
-  }, [progressData]);
+  console.log('📊 Rendering Insights with progress data count:', progressData.length);
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8">
 
 
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
         className="text-center"
-      >
+        >
         <div className="flex items-center justify-center mb-4">
           <div className="p-3 bg-gradient-to-r from-primary-500 to-purple-600 rounded-2xl">
-            <Brain className="w-8 h-8 text-white" />
+          <Brain className="w-8 h-8 text-white" />
           </div>
         </div>
         <h1 className="text-4xl font-bold text-neutral-800 mb-2">Your Mental Health Insights</h1>
         <p className="text-xl text-neutral-600">Track your progress and celebrate your journey</p>
-      </motion.div>
+        </motion.div>
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -98,8 +132,8 @@ const Insights: React.FC = () => {
           <h3 className="text-lg font-semibold text-green-800 mb-1">Wellness Score</h3>
           <p className="text-green-600 text-sm">Based on your recent mood entries</p>
           <div className="mt-4 bg-green-200 rounded-full h-2">
-            <div 
-              className="bg-green-500 h-2 rounded-full transition-all duration-1000"
+              <div 
+                className="bg-green-500 h-2 rounded-full transition-all duration-1000"
               style={{ width: `${wellnessScore}%` }}
             ></div>
           </div>
@@ -168,7 +202,7 @@ const Insights: React.FC = () => {
             <p className="text-orange-600">Personalized observations about your progress</p>
           </div>
         </div>
-
+        
         <div className="bg-white rounded-xl p-6 border border-orange-200">
           <p className="text-gray-800 text-lg leading-relaxed">
             Great job maintaining your mental health tracking routine! Your consistency shows real commitment to your wellbeing. 
@@ -201,8 +235,8 @@ const Insights: React.FC = () => {
               <li>• Celebrate small wins</li>
             </ul>
           </div>
-        </div>
-      </motion.div>
+          </div>
+        </motion.div>
 
       {/* Progress Chart */}
       <motion.div

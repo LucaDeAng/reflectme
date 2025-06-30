@@ -303,7 +303,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
+      console.log('📧 Sign up result:', { 
+        hasUser: !!signUpResult.user, 
+        hasSession: !!signUpResult.session,
+        needsEmailConfirmation: !!signUpResult.user && !signUpResult.session
+      });
+
       if (signUpResult.user) {
+        // Check if email confirmation is required
+        if (!signUpResult.session) {
+          console.log('📧 Email confirmation required for user:', signUpResult.user.email);
+          // User was created but needs email confirmation
+          // Don't create profile yet - it will be created when they confirm email
+          return; // Exit here - the UI will handle showing confirmation message
+        }
+
+        // User is immediately authenticated (email confirmation disabled)
         // Create profile with error handling
         const { error: profileResult } = await safeAsync(async () => {
           const nameParts = (userData.name || '').split(' ');
@@ -347,6 +362,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               ErrorSeverity.MEDIUM,
               { profileError, userId: signUpResult.user!.id }
             );
+          }
+
+          // Create role-specific records
+          if (userData.role === 'therapist') {
+            const { error: therapistError } = await supabase
+              .from('therapist')
+              .insert([
+                {
+                  email: email,
+                  first_name: firstName,
+                  last_name: lastName,
+                  status: 'active',
+                  hourly_rate: 0.00,
+                  currency: 'EUR',
+                },
+              ]);
+
+            if (therapistError && !therapistError.message.includes('duplicate key value')) {
+              logError(new AppError(
+                `Therapist record creation failed: ${therapistError.message}`,
+                ErrorType.DATABASE,
+                ErrorSeverity.MEDIUM,
+                { therapistError, userId: signUpResult.user!.id }
+              ), {
+                action: 'create_therapist_record',
+                userId: signUpResult.user.id
+              });
+            }
+          }
+
+          if (userData.role === 'patient') {
+            const { error: clientError } = await supabase
+              .from('clients')
+              .insert([
+                {
+                  email: email,
+                  first_name: firstName,
+                  last_name: lastName,
+                  status: 'active',
+                },
+              ]);
+
+            if (clientError && !clientError.message.includes('duplicate key value')) {
+              logError(new AppError(
+                `Client record creation failed: ${clientError.message}`,
+                ErrorType.DATABASE,
+                ErrorSeverity.MEDIUM,
+                { clientError, userId: signUpResult.user!.id }
+              ), {
+                action: 'create_client_record',
+                userId: signUpResult.user.id
+              });
+            }
           }
         }, {
           action: 'create_user_profile',
@@ -541,44 +609,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       // For demo accounts, create a mock session instead of real auth
-      const isDemoAccount = email.endsWith('@mindtwin.demo') || email.endsWith('@zentia.app');
-      if (isDemoAccount) {
+      const { isDemoEmail, validateDemoCredentials, createDemoUser } = await import('../utils/demoManager');
+      
+      if (isDemoEmail(email)) {
         console.log('🎭 Demo account detected - creating mock session');
         
-        // Check for specific demo credentials
-        let isValidDemo = false;
-        let role: 'therapist' | 'patient' | 'admin' = 'patient';
-        let name = 'Demo User';
+        const demoAccount = validateDemoCredentials(email, password);
         
-        // Check for new Zentia demo credentials
-        if (email === 'demo.therapist@zentia.app' && password === 'ZentiaDemo2024!') {
-          isValidDemo = true;
-          role = 'therapist';
-          name = 'Demo Therapist';
-        } else if (email === 'demo.client@zentia.app' && password === 'ZentiaClient2024!') {
-          isValidDemo = true;
-          role = 'patient';
-          name = 'Demo Client';
-        } else if (email === 'admin@zentia.app' && password === 'ZentiaAdmin2024!') {
-          isValidDemo = true;
-          role = 'admin';
-          name = 'Demo Admin';
-        } else if (email.endsWith('@mindtwin.demo') && password === 'demo123456') {
-          // Legacy demo support
-          isValidDemo = true;
-          if (email.includes('therapist')) {
-            role = 'therapist';
-            name = 'Demo Therapist';
-          } else if (email.includes('admin')) {
-            role = 'admin';
-            name = 'Demo Admin';
-          } else {
-            role = 'patient';
-            name = 'Demo Client';
-          }
-        }
-        
-        if (!isValidDemo) {
+        if (!demoAccount) {
           throw new AppError(
             'Invalid demo account credentials',
             ErrorType.AUTHENTICATION,
@@ -589,14 +627,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         // Create mock demo user
-        const mockDemoUser: AuthUser = {
-          id: `demo-${role}-${Date.now()}`,
-          name,
-          email,
-          role,
-          avatar: `https://api.dicebear.com/7.x/personas/svg?seed=${encodeURIComponent(email)}`,
-          isDemo: true,
-        };
+        const mockDemoUser: AuthUser = createDemoUser(demoAccount);
         
         // Set the user immediately
         setUser(mockDemoUser);

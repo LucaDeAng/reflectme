@@ -263,7 +263,7 @@ beforeSend(event) {
 - **Attributes**: client_id, response_length, safety_violation, violation_severity
 - **Critical Features**:
   - Crisis keyword detection tracking
-  - OpenAI moderation result logging
+  - Gemini AI safety analysis logging
   - Fail-safe error handling (blocks unsafe content if safety check fails)
 
 #### Crisis Alert Generation
@@ -398,7 +398,7 @@ captureContextualError(error, {
 - **Input/Output Guardrails**: Complete safety pipeline monitoring
 - **Crisis Detection**: Keyword-based alert generation tracking
 - **Therapist Notifications**: Alert delivery and response monitoring
-- **Content Moderation**: OpenAI API integration tracking
+- **Content Moderation**: Gemini AI safety analysis tracking
 
 ### 2. AI Performance Analytics
 - **Generation Times**: Track AI response performance

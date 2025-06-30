@@ -17,9 +17,12 @@ import {
   Brain,
   Clock,
   TrendingUp,
-  Share2
+  Share2,
+  X
 } from 'lucide-react';
 import EmptyState from '../../components/ui/EmptyState';
+import { supabase } from '../../lib/supabase';
+import { convertToUUID } from '../../services/mcpService';
 
 interface JournalEntry {
   id: string;
@@ -39,6 +42,7 @@ const Journal: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMoodFilter, setSelectedMoodFilter] = useState<number | null>(null);
   const [showVoiceJournal, setShowVoiceJournal] = useState(false);
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
 
   const moodLabels = {
     1: '😢 Very Low',
@@ -54,49 +58,139 @@ const Journal: React.FC = () => {
     'overwhelmed', 'content', 'creative', 'social', 'lonely'
   ];
 
-  const handleAddEntry = () => {
-    if (newEntry.title.trim() && newEntry.content.trim()) {
-      addJournalEntry({
-        id: Date.now().toString(),
-        date: new Date().toISOString().split('T')[0],
+  useEffect(() => {
+    if (user?.id) {
+      loadJournalEntries();
+    }
+  }, [user?.id]);
+
+  const loadJournalEntries = async () => {
+    if (!user?.id) return;
+
+    try {
+      const userUUID = convertToUUID(user.id);
+      const { data, error } = await supabase
+        .from('journal_entries')
+        .select('*')
+        .eq('user_id', userUUID)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedEntries: JournalEntry[] = data?.map(entry => ({
+        id: entry.id,
+        date: entry.created_at,
+        title: entry.content.substring(0, 50) + (entry.content.length > 50 ? '...' : ''),
+        content: entry.content,
+        mood: entry.mood_score || 3,
+        tags: entry.tags || [],
+        type: 'written' as const
+      })) || [];
+
+      setEntries(formattedEntries);
+      console.log('✅ Loaded', formattedEntries.length, 'journal entries from Supabase');
+    } catch (error) {
+      console.error('❌ Error loading journal entries:', error);
+    }
+  };
+
+  const handleAddEntry = async () => {
+    if (!user?.id || !newEntry.title.trim() || !newEntry.content.trim()) return;
+
+    try {
+      const userUUID = convertToUUID(user.id);
+      
+      const { data, error } = await supabase
+        .from('journal_entries')
+        .insert({
+          user_id: userUUID,
+          content: `${newEntry.title}\n\n${newEntry.content}`,
+          mood_score: newEntry.mood,
+          tags: [],
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      console.log('✅ Journal entry saved:', data);
+
+      const localEntry: JournalEntry = {
+        id: data.id,
+        date: data.created_at,
         title: newEntry.title,
         content: newEntry.content,
         mood: newEntry.mood,
         tags: [],
         type: 'written'
-      });
+      };
+
+      setEntries([localEntry, ...entries]);
+
       setNewEntry({ title: '', content: '', mood: 5 });
       setShowAddForm(false);
+
+    } catch (error) {
+      console.error('❌ Error saving journal entry:', error);
+      alert('Failed to save journal entry. Please try again.');
     }
   };
 
-  const handleVoiceJournalUpdate = (data: { journal: string; mood: number }) => {
-    if (data.journal && data.mood > 0) {
-      addJournalEntry({
-        id: Date.now().toString(),
-        date: new Date().toISOString().split('T')[0],
-        title: 'Voice Entry',
+  const handleVoiceJournalUpdate = async (data: { journal: string; mood: number }) => {
+    if (!user?.id || !data.journal.trim()) return;
+
+    try {
+      const userUUID = convertToUUID(user.id);
+      
+      const { data: savedEntry, error } = await supabase
+        .from('journal_entries')
+        .insert({
+          user_id: userUUID,
+          content: data.journal,
+          mood_score: data.mood,
+          tags: ['voice'],
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      console.log('✅ Voice journal entry saved:', savedEntry);
+
+      const localEntry: JournalEntry = {
+        id: savedEntry.id,
+        date: savedEntry.created_at,
+        title: data.journal.substring(0, 50) + (data.journal.length > 50 ? '...' : ''),
         content: data.journal,
         mood: data.mood,
-        tags: ['voice-recorded'],
+        tags: ['voice'],
         type: 'voice'
-      });
+      };
+
+      setEntries([localEntry, ...entries]);
+      setShowVoiceJournal(false);
+
+    } catch (error) {
+      console.error('❌ Error saving voice journal:', error);
+      alert('Failed to save voice journal entry. Please try again.');
     }
   };
 
-  const filteredEntries = journalEntries.filter(entry => {
+  const filteredEntries = entries.filter(entry => {
     const matchesSearch = entry.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          entry.content.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesMood = selectedMoodFilter === null || entry.mood === selectedMoodFilter;
     return matchesSearch && matchesMood;
   });
 
-  const averageMood = journalEntries.length > 0 
-    ? (journalEntries.reduce((sum, entry) => sum + entry.mood, 0) / journalEntries.length).toFixed(1)
+  const averageMood = entries.length > 0 
+    ? (entries.reduce((sum, entry) => sum + entry.mood, 0) / entries.length).toFixed(1)
     : '0.0';
 
-  const recentTrend = journalEntries.length >= 2 
-    ? journalEntries[journalEntries.length - 1].mood - journalEntries[journalEntries.length - 2].mood
+  const recentTrend = entries.length >= 2 
+    ? entries[entries.length - 1].mood - entries[entries.length - 2].mood
     : 0;
 
   return (
@@ -149,7 +243,7 @@ const Journal: React.FC = () => {
               <BookOpen className="w-5 h-5 text-blue-600" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-gray-900">{journalEntries.length}</div>
+          <div className="text-2xl font-bold text-gray-900">{entries.length}</div>
           <p className="text-sm text-gray-600">entries recorded</p>
         </motion.div>
 
