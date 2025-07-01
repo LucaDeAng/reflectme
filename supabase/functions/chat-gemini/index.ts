@@ -15,6 +15,8 @@ interface RAGResult {
   full_content: string
   score: number
   metadata: any
+  query_intent?: string
+  relevance_reason?: string
 }
 
 interface ChatResponse {
@@ -161,7 +163,7 @@ serve(async (req) => {
 
     searchTime = Date.now() - searchStart
 
-    // Build context from search results
+    // Build context from search results with intelligent metadata
     let contextText = ''
     const tablesQueried: string[] = []
 
@@ -173,8 +175,14 @@ serve(async (req) => {
           tablesQueried.push(result.table_name)
         }
         
-        contextText += `${index + 1}. From table "${result.table_name}" (ID: ${result.id}, similarity: ${(result.score * 100).toFixed(1)}%):\n`
-        contextText += `${result.preview}\n\n`
+        // Include query_intent and relevance_reason for intelligent response generation
+        const queryIntent = result.query_intent || result.metadata?.query_intent || 'general_search'
+        const relevanceReason = result.relevance_reason || result.metadata?.relevance_reason || 'Found relevant content'
+        
+        contextText += `${index + 1}. From table "${result.table_name}" (ID: ${result.id}, similarity: ${(result.score * 100).toFixed(1)}%, intent: ${queryIntent}):\n`
+        contextText += `${result.preview}\n`
+        contextText += `Query intent: ${queryIntent}\n`
+        contextText += `Relevance: ${relevanceReason}\n\n`
       })
     } else {
       contextText = "No relevant information found in the database for this query.\n"
@@ -274,16 +282,17 @@ async function generateGeminiResponse(
     let knowledgeDataCount = 0;
     
     lines.forEach((line) => {
-      if (line.includes('personal_mood_data')) {
+      // Check for query intent patterns
+      if (line.includes('Query intent: personal_mood_data') || line.includes('intent: personal_mood_data')) {
         queryIntent = 'personal_mood_data';
         personalDataFound = true;
-      } else if (line.includes('personal_session_data')) {
+      } else if (line.includes('Query intent: personal_session_data') || line.includes('intent: personal_session_data')) {
         queryIntent = 'personal_session_data';
         personalDataFound = true;
-      } else if (line.includes('personal_progress_data')) {
+      } else if (line.includes('Query intent: personal_progress_data') || line.includes('intent: personal_progress_data')) {
         queryIntent = 'personal_progress_data';
         personalDataFound = true;
-      } else if (line.includes('coping_tools_info')) {
+      } else if (line.includes('Query intent: coping_tools_info') || line.includes('intent: coping_tools_info')) {
         queryIntent = 'coping_tools_info';
       }
       
