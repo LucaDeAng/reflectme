@@ -22,6 +22,11 @@ import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Login from './pages/Login';
 
+// Freemium System Pages
+import ClientInviteAcceptance from './pages/ClientInviteAcceptance';
+import TherapistProfileManagement from './pages/therapist/TherapistProfileManagement';
+import { TherapistDirectory } from './components/therapist/TherapistDirectory';
+
 // Therapist Pages
 import TherapistDashboard from './pages/therapist/Dashboard';
 import TherapistClientDetails from './pages/therapist/ClientDetails';
@@ -309,6 +314,25 @@ function App() {
                                   <AssessmentPage />
                                 </ErrorBoundary>
                               } />
+
+                {/* Freemium System Routes */}
+                              <Route path="/invite/:inviteCode" element={
+                                <ErrorBoundary componentName="ClientInviteAcceptance">
+                                  <ClientInviteAcceptance />
+                                </ErrorBoundary>
+                              } />
+                              
+                              <Route path="/therapists" element={
+                                <ErrorBoundary componentName="TherapistDirectory">
+                                  <TherapistDirectory />
+                                </ErrorBoundary>
+                              } />
+                              
+                              <Route path="/therapists/:slug" element={
+                                <ErrorBoundary componentName="TherapistDirectory">
+                                  <TherapistDirectory />
+                                </ErrorBoundary>
+                              } />
                 
                 {/* Legacy Zentia App Routes - redirect to new client routes */}
                 <Route path="/app" element={<Navigate to="/client" replace />} />
@@ -496,6 +520,13 @@ function App() {
                                 <Route path="assessments-management" element={
                                   <ErrorBoundary componentName="AssessmentManagement">
                                     <AssessmentManagement />
+                                  </ErrorBoundary>
+                                } />
+                                
+                                {/* Freemium System Routes */}
+                                <Route path="profile-management" element={
+                                  <ErrorBoundary componentName="TherapistProfileManagement">
+                                    <TherapistProfileManagement />
                                   </ErrorBoundary>
                                 } />
                   
