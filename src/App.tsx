@@ -23,8 +23,8 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import Login from './pages/Login';
 
 // Freemium System Pages
-import ClientInviteAcceptance from './pages/ClientInviteAcceptance';
-import TherapistProfileManagement from './pages/therapist/TherapistProfileManagement';
+import { ClientInviteAcceptance } from './pages/ClientInviteAcceptance';
+import { TherapistProfileManagement } from './pages/therapist/TherapistProfileManagement';
 import { TherapistDirectory } from './components/therapist/TherapistDirectory';
 
 // Therapist Pages
