@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useSupabase } from '../../contexts/ZentiaContext';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Card } from '../../components/ui/card';
@@ -46,7 +47,7 @@ const activeTab = {
 };
 
 export function TherapistProfileManagement() {
-  const { supabase, user } = useSupabase();
+  const { user } = useAuth();
   const [profile, setProfile] = useState<TherapistProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);

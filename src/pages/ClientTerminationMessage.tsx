@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useSupabase } from '../contexts/ZentiaContext';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { useNavigate } from 'react-router-dom';
@@ -16,7 +17,7 @@ interface TherapistInfo {
 }
 
 export function ClientTerminationMessage() {
-  const { supabase, user } = useSupabase();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [therapistInfo, setTherapistInfo] = useState<TherapistInfo | null>(null);
   const [terminationReason, setTerminationReason] = useState<string>('');

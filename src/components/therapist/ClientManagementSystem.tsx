@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useSupabase } from '../../contexts/ZentiaContext';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -35,7 +36,7 @@ interface BillingInfo {
 }
 
 export function ClientManagementSystem() {
-  const { supabase, user } = useSupabase();
+  const { user } = useAuth();
   const [clients, setClients] = useState<ClientRelationship[]>([]);
   const [billingInfo, setBillingInfo] = useState<BillingInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);

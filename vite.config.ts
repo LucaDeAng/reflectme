@@ -31,6 +31,7 @@ export default defineConfig({
           ui: ['lucide-react', 'framer-motion'],
         },
       },
+      external: ['react-hot-toast'],
     },
   },
   define: {

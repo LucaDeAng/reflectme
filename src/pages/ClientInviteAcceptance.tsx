@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useSupabase } from '../contexts/ZentiaContext';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
@@ -27,7 +28,7 @@ interface Invitation {
 export function ClientInviteAcceptance() {
   const { inviteCode } = useParams();
   const navigate = useNavigate();
-  const { supabase, user } = useSupabase();
+  const { user } = useAuth();
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAccepting, setIsAccepting] = useState(false);

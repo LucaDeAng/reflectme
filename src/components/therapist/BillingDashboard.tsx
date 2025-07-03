@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useSupabase } from '../../contexts/ZentiaContext';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -29,7 +30,7 @@ interface TherapistProfile {
 }
 
 export function BillingDashboard() {
-  const { supabase, user } = useSupabase();
+  const { user } = useAuth();
   const [billingRecords, setBillingRecords] = useState<BillingRecord[]>([]);
   const [therapistProfile, setTherapistProfile] = useState<TherapistProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);

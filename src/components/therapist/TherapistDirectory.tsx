@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSupabase } from '../../contexts/ZentiaContext';
+import { supabase } from '../../lib/supabase';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card } from '../ui/card';
@@ -33,7 +33,7 @@ interface DirectoryStats {
 }
 
 export function TherapistDirectory() {
-  const { supabase } = useSupabase();
+  // supabase is now imported directly
   const navigate = useNavigate();
   const [therapists, setTherapists] = useState<TherapistProfile[]>([]);
   const [filteredTherapists, setFilteredTherapists] = useState<TherapistProfile[]>([]);

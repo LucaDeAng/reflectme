@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useSupabase } from '../../contexts/ZentiaContext';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card } from '../ui/card';
@@ -26,7 +27,7 @@ interface TherapistProfile {
 }
 
 export function ClientInviteSystem() {
-  const { supabase, user } = useSupabase();
+  const { user } = useAuth();
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [therapistProfile, setTherapistProfile] = useState<TherapistProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
