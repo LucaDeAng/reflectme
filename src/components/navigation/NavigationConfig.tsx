@@ -30,7 +30,8 @@ import {
   HelpCircle,
   Star,
   Zap,
-  Lightbulb
+  Lightbulb,
+  CreditCard
 } from 'lucide-react';
 
 export interface NavigationItem {
@@ -141,6 +142,16 @@ export const getTherapistNavigation = (): NavigationConfig => ({
       icon: ClipboardList,
       priority: 2,
       category: 'management'
+    },
+    {
+      id: 'profile-billing',
+      label: 'Profile & Billing',
+      description: 'Manage your public profile and subscription',
+      href: '/therapist/profile-management',
+      icon: CreditCard,
+      priority: 2,
+      category: 'management',
+      isNew: true
     },
 
     // Clinical Tools
