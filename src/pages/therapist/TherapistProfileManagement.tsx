@@ -8,7 +8,7 @@ import { Badge } from '../../components/ui/badge';
 import { ClientInviteSystem } from '../../components/therapist/ClientInviteSystem';
 import { ClientManagementSystem } from '../../components/therapist/ClientManagementSystem';
 import { BillingDashboard } from '../../components/therapist/BillingDashboard';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface TherapistProfile {
   id: string;

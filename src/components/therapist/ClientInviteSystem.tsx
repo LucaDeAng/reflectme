@@ -5,7 +5,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface Invitation {
   id: string;
